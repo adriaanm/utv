@@ -51,12 +51,16 @@ Key findings:
 - [x] Consent/cookie management accessible via toolbar menu on iOS
 - [x] `just build-ios` recipe targeting iPad simulator
 
-## Phase 3: tvOS port
+## Phase 3: tvOS port — not feasible
 
-- [ ] New tvOS target in the Xcode project, sharing the WebView + content blocking core
-- [ ] Focus-based UI for Siri Remote navigation
-- [ ] TV-appropriate layout (10-foot UI)
-- [ ] TestFlight distribution
+tvOS has no WebKit/WKWebView, so the core playback approach doesn't work. We explored several alternatives on the `experiment-apple-tv` branch:
+
+- **Innertube API** (ANDROID_VR client identity) — returns direct stream URLs, but YouTube blocks with "sign in to prove you're not a bot"
+- **Headless WKWebView extraction** — YouTube uses MSE/UMP (MediaSource + proprietary chunked protocol), so `video.currentSrc` is a `blob:` URL, not a direct video URL
+- **Fetch interception + n-parameter deciphering** — amounts to reimplementing yt-dlp's signature logic, which is fragile and breaks with every YouTube player update
+- **HTTPS proxy on WKWebView traffic** — can't inspect encrypted traffic without MITM CA, and WKWebView doesn't expose proxy configuration
+
+**Conclusion:** tvOS streaming requires either a WebKit port to tvOS (unlikely from Apple) or maintaining a yt-dlp-equivalent decipher engine (not sustainable for a personal project). Parking this until the platform landscape changes.
 
 ## Ad blocking maintenance
 
