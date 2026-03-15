@@ -60,7 +60,7 @@ struct utvApp: App {
 
             Divider()
 
-            ConsentWebView()
+            ConsentWebView(searchQuery: consentManager.consentSearchQuery)
         }
         .frame(minWidth: 600, idealWidth: 700, minHeight: 500, idealHeight: 600)
     }

@@ -18,6 +18,9 @@ final class ConsentManager {
     private static let cookieDomain = ".youtube.com"
 
     var showConsentSheet = false
+    /// Optional search query to load in the consent web view (e.g. a channel name).
+    /// YouTube shows the consent banner when navigating to search results.
+    var consentSearchQuery: String?
 
     var socsCookieValue: String? {
         get { UserDefaults.standard.string(forKey: Self.defaultsKey) }
@@ -38,11 +41,14 @@ final class ConsentManager {
 
     /// Ensure we have a consent cookie. If one exists, re-inject it into the shared
     /// WKWebView cookie store. Otherwise, show the consent sheet.
-    func ensureConsent() async {
+    /// Pass a `searchQuery` to load a YouTube search in the consent view
+    /// (YouTube only shows the consent banner on actual page navigations).
+    func ensureConsent(searchQuery: String? = nil) async {
         if let value = socsCookieValue {
             await injectCookie(value: value)
             return
         }
+        consentSearchQuery = searchQuery
         showConsentSheet = true
     }
 
@@ -97,11 +103,13 @@ final class ConsentManager {
 
 #if os(macOS)
 struct ConsentWebView: NSViewRepresentable {
+    var searchQuery: String?
     func makeNSView(context: Context) -> WKWebView { makeConsentWebView() }
     func updateNSView(_ nsView: WKWebView, context: Context) {}
 }
 #else
 struct ConsentWebView: UIViewRepresentable {
+    var searchQuery: String?
     func makeUIView(context: Context) -> WKWebView { makeConsentWebView() }
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 }
@@ -111,7 +119,13 @@ extension ConsentWebView {
     func makeConsentWebView() -> WKWebView {
         let config = WKWebViewConfiguration()
         let wv = WKWebView(frame: .zero, configuration: config)
-        wv.load(URLRequest(url: URL(string: "https://www.youtube.com")!))
+        let url: URL
+        if let q = searchQuery?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), !q.isEmpty {
+            url = URL(string: "https://www.youtube.com/results?search_query=\(q)")!
+        } else {
+            url = URL(string: "https://www.youtube.com/results?search_query=music")!
+        }
+        wv.load(URLRequest(url: url))
         return wv
     }
 }

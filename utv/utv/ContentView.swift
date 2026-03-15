@@ -133,7 +133,7 @@ struct ContentView: View {
                 let channel = try await feedService.addChannel(handle: handle)
                 selectedChannel = channel
             } catch ChannelFeed.FeedError.consentRequired {
-                ConsentManager.shared.showConsentSheet = true
+                await ConsentManager.shared.ensureConsent(searchQuery: handle)
                 errorMessage = "Consent required — please accept cookies and try again."
             } catch {
                 errorMessage = error.localizedDescription
