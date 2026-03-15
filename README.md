@@ -1,4 +1,4 @@
-# utv
+# <img src="docs/icon.png" width="32" height="32" alt="utv icon"> utv
 
 A simple YouTube browser for macOS and iOS. Like an old-school TV: pick a channel, watch a video. No ads.
 
