@@ -166,9 +166,26 @@ struct ChannelBrowser {
         return BrowseResult(videos: videos, continuation: nextContinuation)
     }
 
-    /// Parse a single videoRenderer into VideoInfo.
+    /// Parse a single videoRenderer into VideoInfo. Returns nil for Shorts.
     private static func parseVideoRenderer(_ renderer: [String: Any]) -> VideoInfo? {
         guard let videoID = renderer["videoId"] as? String else { return nil }
+
+        // Filter out Shorts — check navigation endpoint and overlay badges
+        if let navEp = renderer["navigationEndpoint"] as? [String: Any],
+           let command = navEp["commandMetadata"] as? [String: Any],
+           let web = command["webCommandMetadata"] as? [String: Any],
+           let url = web["url"] as? String,
+           url.contains("/shorts/") {
+            return nil
+        }
+        if let overlays = renderer["thumbnailOverlays"] as? [[String: Any]] {
+            for overlay in overlays {
+                if let style = overlay["thumbnailOverlayTimeStatusRenderer"] as? [String: Any],
+                   let s = style["style"] as? String, s == "SHORTS" {
+                    return nil
+                }
+            }
+        }
 
         let title: String
         if let titleObj = renderer["title"] as? [String: Any],
