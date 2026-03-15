@@ -7,7 +7,7 @@ struct ContentView: View {
 
     @State private var selectedChannel: Channel?
     @State private var playingVideo: Video?
-    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var handleInput = ""
     @State private var isAddingChannel = false
     @State private var isRefreshing = false
@@ -25,6 +25,10 @@ struct ContentView: View {
         }
         .task {
             await refreshAll()
+            // Select the first channel on launch if none selected
+            if selectedChannel == nil, let first = channels.first {
+                selectedChannel = first
+            }
         }
         .onChange(of: selectedChannel) { _, newValue in
             // Selecting a channel while playing pauses video and shows channel list
