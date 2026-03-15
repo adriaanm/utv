@@ -1,0 +1,112 @@
+[
+  {
+    "trigger": { "url-filter": "doubleclick\\.net" },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": { "url-filter": "googlesyndication\\.com" },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": { "url-filter": "googleadservices\\.com" },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "youtube\\.com/api/stats/ads",
+      "if-domain": ["*youtube.com"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "youtube\\.com/pagead/",
+      "if-domain": ["*youtube.com"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "youtube\\.com/ptracking",
+      "if-domain": ["*youtube.com"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "youtube\\.com/get_midroll_",
+      "if-domain": ["*youtube.com"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "ads\\.youtube\\.com"
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "youtube\\.com/error_204",
+      "if-domain": ["*youtube.com"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": ".*_ad_.*",
+      "if-domain": ["*youtube.com"],
+      "resource-type": ["media"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "youtube\\.com/api/stats/atr",
+      "if-domain": ["*youtube.com"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "yt3\\.ggpht\\.com/.*ad",
+      "if-domain": ["*youtube.com"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "youtube\\.com/csi_204",
+      "if-domain": ["*youtube.com"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "youtube\\.com/api/stats/qoe",
+      "if-domain": ["*youtube.com"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "play\\.google\\.com/log",
+      "if-domain": ["*youtube.com"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "youtube\\.com/generate_204",
+      "if-domain": ["*youtube.com"]
+    },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": {
+      "url-filter": "youtube\\.com/sw\\.js_data",
+      "if-domain": ["*youtube.com"]
+    },
+    "action": { "type": "block" }
+  }
+]

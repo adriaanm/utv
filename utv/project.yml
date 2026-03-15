@@ -1,0 +1,38 @@
+name: utv
+options:
+  bundleIdPrefix: com.utv
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+  minimumXcodeGenVersion: "2.0"
+
+targets:
+  utv:
+    type: application
+    platform: macOS
+    sources:
+      - path: utv
+        excludes:
+          - Resources/**
+    resources:
+      - path: utv/Resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.utv.app
+        PRODUCT_NAME: utv
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.entertainment"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSMainStoryboardFile: ""
+        CODE_SIGN_ENTITLEMENTS: utv/utv.entitlements
+      configs:
+        debug:
+          CODE_SIGN_IDENTITY: "-"
+        release:
+          CODE_SIGN_IDENTITY: "-"
+    entitlements:
+      path: utv/utv.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
