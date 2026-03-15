@@ -18,6 +18,22 @@ struct WebPlayerView: NSViewRepresentable {
         config.userContentController.add(context.coordinator, name: "utvPosition")
         config.userContentController.add(context.coordinator, name: "utvFullscreen")
 
+        // Override fullscreen API at document start, before YouTube captures references
+        let fsOverride = WKUserScript(source: """
+            Element.prototype.requestFullscreen = function() {
+                window.webkit.messageHandlers.utvFullscreen.postMessage('toggle');
+                return Promise.resolve();
+            };
+            Element.prototype.webkitRequestFullscreen = Element.prototype.requestFullscreen;
+            Element.prototype.webkitRequestFullScreen = Element.prototype.requestFullscreen;
+            Document.prototype.exitFullscreen = function() {
+                window.webkit.messageHandlers.utvFullscreen.postMessage('toggle');
+                return Promise.resolve();
+            };
+            Document.prototype.webkitExitFullscreen = Document.prototype.exitFullscreen;
+            """, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page)
+        config.userContentController.addUserScript(fsOverride)
+
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 
@@ -223,23 +239,7 @@ struct WebPlayerView: NSViewRepresentable {
                     player.setInternalSize();
                 }
 
-                // Intercept YouTube's fullscreen button → toggle macOS window fullscreen
-                if (!window._utvFsHooked) {
-                    window._utvFsHooked = true;
-                    // Override requestFullscreen so YouTube's click triggers native window fullscreen
-                    Element.prototype.requestFullscreen = function() {
-                        window.webkit.messageHandlers.utvFullscreen.postMessage('toggle');
-                        return Promise.resolve();
-                    };
-                    Element.prototype.webkitRequestFullscreen = Element.prototype.requestFullscreen;
-                    Element.prototype.webkitRequestFullScreen = Element.prototype.requestFullscreen;
-                    // Also override exitFullscreen
-                    Document.prototype.exitFullscreen = function() {
-                        window.webkit.messageHandlers.utvFullscreen.postMessage('toggle');
-                        return Promise.resolve();
-                    };
-                    Document.prototype.webkitExitFullscreen = Document.prototype.exitFullscreen;
-                }
+                // Fullscreen override is injected at document start (WKUserScript)
             })();
             """
 
