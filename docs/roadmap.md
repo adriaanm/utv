@@ -61,6 +61,10 @@ This is a personal-use app. We don't need automated filter pipelines — just a 
 
 When ads start appearing: run `just sync`, test, and if needed update the content rules or CSS by checking uAssets upstream diffs.
 
+## Backlog
+
+- [ ] Automate YouTube consent flow — currently the user has to click a video, trigger the cookie banner, and accept manually. Low priority since it only happens once per machine.
+
 ## Open questions
 
 - Can `WKContentRuleList` handle the full uBO ruleset size, or do we need to trim? (WebKit has a 50k rule limit per list, but allows multiple lists)

@@ -54,7 +54,7 @@ struct ContentView: View {
                     VStack(alignment: .leading) {
                         Text("YouTube Consent")
                             .font(.headline)
-                        Text("Accept or reject cookies, then click Done.")
+                        Text("Click on a video to trigger the cookie banner, then accept cookies to use the app.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
