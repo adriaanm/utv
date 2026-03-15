@@ -28,7 +28,12 @@ install:
     BUILT=$(xcodebuild -project utv/utv.xcodeproj -scheme utv -configuration Release -showBuildSettings 2>/dev/null | grep ' BUILT_PRODUCTS_DIR' | awk '{print $3}')
     rm -rf /Applications/utv.app
     cp -R "$BUILT/utv.app" /Applications/utv.app
+    xattr -cr /Applications/utv.app
     echo "Installed to /Applications/utv.app"
+
+# Create self-signed code signing certificate (once per Mac)
+cert:
+    ./scripts/create-cert.sh
 
 # Clean build artifacts
 clean:
