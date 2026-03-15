@@ -5,6 +5,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Channel.displayName) private var channels: [Channel]
 
+    @State private var consentManager = ConsentManager.shared
     @State private var selectedChannel: Channel?
     @State private var playingVideo: Video?
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -40,6 +41,35 @@ struct ContentView: View {
                 columnVisibility = .automatic
             }
         }
+        #if canImport(WebKit)
+        .task {
+            await consentManager.ensureConsent()
+        }
+        .sheet(item: $consentManager.consentRequest) { request in
+            VStack(spacing: 0) {
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text("YouTube Consent")
+                            .font(.headline)
+                        Text("Accept or reject cookies, then click Done.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Done") {
+                        Task { await consentManager.finishConsent() }
+                    }
+                    .keyboardShortcut(.defaultAction)
+                }
+                .padding()
+
+                Divider()
+
+                ConsentWebView(searchQuery: request.searchQuery)
+            }
+            .frame(minWidth: 600, idealWidth: 700, minHeight: 500, idealHeight: 600)
+        }
+        #endif
     }
 
     // MARK: - Sidebar
