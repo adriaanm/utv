@@ -34,6 +34,23 @@ targets:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
 
+  utv-ios:
+    type: application
+    platform: iOS
+    sources:
+      - path: utv
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.utv.ios
+        PRODUCT_NAME: utv
+        SWIFT_VERSION: "5.9"
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
+
   utv-tv:
     type: application
     platform: tvOS

@@ -7,6 +7,11 @@ utv/utv.xcodeproj/
 # Copied by sync script (regenerate with `just sync`)
 utv/utv/Resources/ubo-scriptlets.js
 
+# Local environment (contains signing team ID etc.)
+.envrc
+
+.DS_Store
+
 # Xcode
 *.xcuserdata
 DerivedData/

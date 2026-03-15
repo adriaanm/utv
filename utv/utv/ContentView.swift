@@ -286,11 +286,9 @@ struct VideoListView: View {
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
-                    #if os(macOS)
                     Button("Open in Browser") {
                         openInBrowser(video)
                     }
-                    #endif
                     if video.lastPosition > 0 {
                         Button("Resume at \(formatTime(video.lastPosition))") {
                             onPlay(video)
@@ -316,12 +314,14 @@ struct VideoListView: View {
         .navigationTitle(channel.displayName)
     }
 
-    #if os(macOS)
     private func openInBrowser(_ video: Video) {
         let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
+        #if os(macOS)
         NSWorkspace.shared.open(url)
+        #else
+        UIApplication.shared.open(url)
+        #endif
     }
-    #endif
 
     private func loadMore() {
         guard !isLoadingMore, channel.hasMoreVideos else { return }
@@ -409,14 +409,16 @@ struct PlayerView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            #if os(macOS)
+            #if os(macOS) || os(iOS)
             HStack {
                 Button {
                     onBack()
                 } label: {
                     Label("Back", systemImage: "chevron.left")
                 }
+                #if os(macOS)
                 .keyboardShortcut(.escape, modifiers: [])
+                #endif
 
                 Text(video.title)
                     .lineLimit(1)
@@ -426,7 +428,11 @@ struct PlayerView: View {
 
                 Button {
                     let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
+                    #if os(macOS)
                     NSWorkspace.shared.open(url)
+                    #else
+                    UIApplication.shared.open(url)
+                    #endif
                 } label: {
                     Label("Open in Browser", systemImage: "safari")
                 }

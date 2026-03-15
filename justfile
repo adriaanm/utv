@@ -16,6 +16,10 @@ build:
 run: build
     open "$(xcodebuild -project utv/utv.xcodeproj -scheme utv -configuration Debug -showBuildSettings 2>/dev/null | grep ' BUILT_PRODUCTS_DIR' | awk '{print $3}')/utv.app"
 
+# Build iOS app (debug)
+build-ios:
+    xcodebuild -project utv/utv.xcodeproj -scheme utv-ios -configuration Debug -destination generic/platform=iOS -allowProvisioningUpdates build
+
 # Build tvOS app (debug, simulator)
 build-tv:
     xcodebuild -project utv/utv.xcodeproj -scheme utv-tv -configuration Debug -destination 'platform=tvOS Simulator,name=Apple TV' build

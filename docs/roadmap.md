@@ -43,6 +43,14 @@ Key findings:
 - [x] Open in browser — for liking/commenting (no login in app)
 - [x] Feed refresh — on launch + manual toolbar button
 
+## Phase 2b: iPad port [done]
+
+- [x] iOS target in project.yml sharing the same source folder
+- [x] Platform conditionals for "Open in Browser" (UIApplication vs NSWorkspace)
+- [x] Player bottom bar on iOS (back button + title + open in browser)
+- [x] Consent/cookie management accessible via toolbar menu on iOS
+- [x] `just build-ios` recipe targeting iPad simulator
+
 ## Phase 3: tvOS port
 
 - [ ] New tvOS target in the Xcode project, sharing the WebView + content blocking core
