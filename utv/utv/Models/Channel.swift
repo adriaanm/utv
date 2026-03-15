@@ -11,8 +11,16 @@ final class Channel {
     @Relationship(deleteRule: .cascade, inverse: \Video.channel)
     var videos: [Video] = []
 
+    /// Continuation token for loading more videos from YouTube browse API.
+    /// Nil means we haven't fetched the videos tab yet, empty string means no more pages.
+    var continuation: String?
+
     var unwatchedCount: Int {
         videos.filter { !$0.watched }.count
+    }
+
+    var hasMoreVideos: Bool {
+        continuation != ""
     }
 
     init(channelID: String, handle: String, displayName: String, addedAt: Date = .now) {

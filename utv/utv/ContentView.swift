@@ -193,8 +193,15 @@ struct ChannelRow: View {
 // MARK: - Video List
 
 struct VideoListView: View {
+    @Environment(\.modelContext) private var modelContext
     let channel: Channel
     let onPlay: (Video) -> Void
+
+    @State private var isLoadingMore = false
+
+    private var feedService: FeedService {
+        FeedService(modelContext: modelContext)
+    }
 
     private var sortedVideos: [Video] {
         channel.videos.sorted { $0.publishedAt > $1.publishedAt }
@@ -216,6 +223,20 @@ struct VideoListView: View {
                             }
                         }
                     }
+                    .onAppear {
+                        if video.videoID == sortedVideos.last?.videoID {
+                            loadMore()
+                        }
+                    }
+            }
+
+            if isLoadingMore {
+                HStack {
+                    Spacer()
+                    ProgressView().controlSize(.small)
+                    Text("Loading more videos...").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                }
             }
         }
         .navigationTitle(channel.displayName)
@@ -224,6 +245,15 @@ struct VideoListView: View {
     private func openInBrowser(_ video: Video) {
         let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
         NSWorkspace.shared.open(url)
+    }
+
+    private func loadMore() {
+        guard !isLoadingMore, channel.hasMoreVideos else { return }
+        isLoadingMore = true
+        Task {
+            try? await feedService.loadMoreVideos(for: channel)
+            isLoadingMore = false
+        }
     }
 }
 

@@ -88,6 +88,34 @@ final class FeedService {
         }
     }
 
+    /// Load more videos for a channel using YouTube's browse API.
+    /// First call fetches the /videos tab, subsequent calls use the continuation token.
+    func loadMoreVideos(for channel: Channel) async throws {
+        let result: ChannelBrowser.BrowseResult
+
+        if let token = channel.continuation, !token.isEmpty {
+            result = try await ChannelBrowser.fetchNextPage(continuation: token)
+        } else {
+            result = try await ChannelBrowser.fetchFirstPage(channelID: channel.channelID)
+        }
+
+        let existingIDs = Set(channel.videos.map(\.videoID))
+        for info in result.videos where !existingIDs.contains(info.videoID) {
+            let video = Video(
+                videoID: info.videoID,
+                title: info.title,
+                publishedAt: info.publishedAt,
+                thumbnailURL: info.thumbnailURL
+            )
+            video.channel = channel
+            modelContext.insert(video)
+        }
+
+        // Store continuation token (nil → "" means no more pages)
+        channel.continuation = result.continuation ?? ""
+        try modelContext.save()
+    }
+
     private func upsertVideos(for channel: Channel, from feedResult: ChannelFeedResult) {
         let existingIDs = Set(channel.videos.map(\.videoID))
 
