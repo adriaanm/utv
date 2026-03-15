@@ -62,7 +62,11 @@ struct WebPlayerView: NSViewRepresentable {
         func load(videoID: String) {
             currentVideoID = videoID
             guard let webView = webView else { return }
-            let url = URL(string: "https://www.youtube.com/watch?v=\(videoID)")!
+            var urlString = "https://www.youtube.com/watch?v=\(videoID)"
+            if startAt > 0 {
+                urlString += "&t=\(Int(startAt))s"
+            }
+            let url = URL(string: urlString)!
             webView.load(URLRequest(url: url))
         }
 
@@ -116,21 +120,28 @@ struct WebPlayerView: NSViewRepresentable {
         // MARK: - JS Injection
 
         private func seekTo(_ seconds: Double, in webView: WKWebView) {
+            // Persistent seek: retries until the position sticks.
+            // YouTube's player init can reset currentTime even after a successful seek.
             let js = """
             (function() {
+                const target = \(seconds);
+                let attempts = 0;
                 function trySeek() {
                     const v = document.querySelector('video');
-                    if (v && v.readyState >= 1) { v.currentTime = \(seconds); }
-                    else { setTimeout(trySeek, 500); }
+                    if (!v || v.readyState < 1) {
+                        if (attempts < 30) { attempts++; setTimeout(trySeek, 500); }
+                        return;
+                    }
+                    if (Math.abs(v.currentTime - target) > 3) {
+                        v.currentTime = target;
+                    }
+                    // Keep checking — YouTube may reset position during init
+                    if (attempts < 20) { attempts++; setTimeout(trySeek, 1000); }
                 }
                 trySeek();
             })();
             """
             webView.evaluateJavaScript(js)
-            // Retry after SPA hydration
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak webView] in
-                webView?.evaluateJavaScript(js)
-            }
         }
 
         private func injectPositionTracker(_ webView: WKWebView) {
