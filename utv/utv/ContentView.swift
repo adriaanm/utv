@@ -43,7 +43,10 @@ struct ContentView: View {
         }
         #if canImport(WebKit)
         .task {
-            await consentManager.ensureConsent()
+            // Re-inject existing cookie into WKWebView store on launch
+            if let value = consentManager.socsCookieValue {
+                await consentManager.ensureConsent()
+            }
         }
         .sheet(item: $consentManager.consentRequest) { request in
             VStack(spacing: 0) {
@@ -159,12 +162,19 @@ struct ContentView: View {
         isAddingChannel = true
 
         Task {
+            // If we don't have a consent cookie yet, show the consent sheet
+            // and let the user consent before attempting the network request.
+            if consentManager.needsConsent {
+                consentManager.consentRequest = ConsentRequest(searchQuery: handle)
+                isAddingChannel = false
+                return
+            }
+
             do {
                 let channel = try await feedService.addChannel(handle: handle)
                 selectedChannel = channel
             } catch ChannelFeed.FeedError.consentRequired {
-                await ConsentManager.shared.ensureConsent(searchQuery: handle)
-                errorMessage = "Consent required — please accept cookies and try again."
+                consentManager.consentRequest = ConsentRequest(searchQuery: handle)
             } catch {
                 errorMessage = error.localizedDescription
             }
