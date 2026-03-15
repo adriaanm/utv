@@ -25,9 +25,13 @@ struct ContentView: View {
         }
         .task {
             await refreshAll()
-            // Select the first channel on launch if none selected
             if selectedChannel == nil, let first = channels.first {
                 selectedChannel = first
+            }
+            // Refresh every 30 minutes while running
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30 * 60))
+                await refreshAll()
             }
         }
         .onChange(of: selectedChannel) { _, newValue in
