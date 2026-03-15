@@ -13,10 +13,13 @@ Goal: play the latest video from a given YouTube channel with ads blocked.
 - [x] Handcrafted WebKit content blocker rules (`content-rules.json`) — blocks ad domains, tracking URLs
 - [x] Inject full uBOL scriptlet bundle (`ubo-scriptlets.js`) via `WKUserScript` at document start
 - [x] CSS hiding rules for ad UI elements
-- [ ] Test against YouTube — verify pre-roll, mid-roll, and banner ads are blocked
+- [x] Test against YouTube — pre-roll ads blocked, cookie consent bypassed
 - [ ] Handle YouTube's anti-adblock detection if needed
 
-Key finding: Chrome DNR rulesets from uBOL-home aren't WebKit-compatible, but the **scriptlet bundle** is self-contained and works in any browser context. It strips `adPlacements`, `adSlots`, `playerAds` from YouTube API responses via json-prune/prevent-fetch/prevent-xhr.
+Key findings:
+- Chrome DNR rulesets from uBOL-home aren't WebKit-compatible, but the **scriptlet bundle** is self-contained and works in any browser context. It strips `adPlacements`, `adSlots`, `playerAds` from YouTube API responses via json-prune/prevent-fetch/prevent-xhr.
+- Scriptlets **must** be injected into `WKContentWorld.page` (not the default isolated world) so they can intercept the page's `fetch`/`XHR`/`JSON.parse`.
+- GDPR cookie consent can be bypassed by pre-setting the `SOCS` cookie.
 
 ### 1b. Minimal playback
 
@@ -31,7 +34,7 @@ Key finding: Chrome DNR rulesets from uBOL-home aren't WebKit-compatible, but th
 - [x] Xcode project (generated via xcodegen from `project.yml`)
 - [x] SwiftUI app with channel input + WebPlayerView
 - [x] `just sync` / `just build` / `just run` recipes
-- [ ] Test with real channels
+- [x] Test with real channels — verified with SimonFordman channel
 
 ## Phase 2: make it actually usable (macOS)
 
@@ -50,5 +53,5 @@ Key finding: Chrome DNR rulesets from uBOL-home aren't WebKit-compatible, but th
 ## Open questions
 
 - Can `WKContentRuleList` handle the full uBO ruleset size, or do we need to trim? (WebKit has a 50k rule limit per list, but allows multiple lists)
-- Do the scriptlet injections work reliably in WKWebView, or does YouTube detect the injection method?
+- ~~Do the scriptlet injections work reliably in WKWebView, or does YouTube detect the injection method?~~ **Yes, confirmed working.** Must use `WKContentWorld.page`.
 - Is the YouTube RSS feed reliable enough for "latest video", or do we need the Data API?
