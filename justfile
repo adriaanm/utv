@@ -31,9 +31,21 @@ install:
     xattr -cr /Applications/utv.app
     echo "Installed to /Applications/utv.app"
 
-# Create self-signed code signing certificate (once per Mac)
-cert:
-    ./scripts/create-cert.sh
+# Build release .app and package as a .tar.gz for sharing
+package:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    xcodebuild -project utv/utv.xcodeproj -scheme utv -configuration Release build
+    BUILT=$(xcodebuild -project utv/utv.xcodeproj -scheme utv -configuration Release -showBuildSettings 2>/dev/null | grep ' BUILT_PRODUCTS_DIR' | awk '{print $3}')
+    STAGING=$(mktemp -d)
+    cp -R "$BUILT/utv.app" "$STAGING/"
+    cp scripts/install-utv.sh "$STAGING/"
+    cd "$STAGING"
+    tar czf utv.tar.gz utv.app install-utv.sh
+    mv utv.tar.gz "{{justfile_directory()}}/"
+    rm -rf "$STAGING"
+    echo "Created utv.tar.gz — transfer to target Mac and run:"
+    echo "  tar xzf utv.tar.gz && ./install-utv.sh"
 
 # Clean build artifacts
 clean:
