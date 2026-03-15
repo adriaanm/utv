@@ -112,6 +112,15 @@ struct ContentView: View {
                     NavigationLink(value: channel) {
                         ChannelRow(channel: channel)
                     }
+                    .contextMenu {
+                        Button("Mark All as Watched") {
+                            markAllWatched(channel)
+                        }
+                        Divider()
+                        Button("Remove Channel", role: .destructive) {
+                            deleteChannel(channel)
+                        }
+                    }
                 }
                 .onDelete(perform: deleteChannels)
             }
@@ -184,11 +193,21 @@ struct ContentView: View {
 
     private func deleteChannels(at offsets: IndexSet) {
         for index in offsets {
-            let channel = channels[index]
-            if selectedChannel == channel {
-                selectedChannel = nil
-            }
-            modelContext.delete(channel)
+            deleteChannel(channels[index])
+        }
+    }
+
+    private func deleteChannel(_ channel: Channel) {
+        if selectedChannel == channel {
+            selectedChannel = nil
+        }
+        modelContext.delete(channel)
+    }
+
+    private func markAllWatched(_ channel: Channel) {
+        for video in channel.videos where !video.watched {
+            video.watched = true
+            video.watchedAt = .now
         }
     }
 
