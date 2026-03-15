@@ -18,19 +18,28 @@ struct WebPlayerView: NSViewRepresentable {
         config.userContentController.add(context.coordinator, name: "utvPosition")
         config.userContentController.add(context.coordinator, name: "utvFullscreen")
 
-        // Override fullscreen API at document start, before YouTube captures references
+        // Override fullscreen API at document start, before YouTube captures references.
+        // YouTube uses HTMLVideoElement.webkitEnterFullscreen (not Element.requestFullscreen),
+        // so we must override all variants.
         let fsOverride = WKUserScript(source: """
-            Element.prototype.requestFullscreen = function() {
-                window.webkit.messageHandlers.utvFullscreen.postMessage('toggle');
-                return Promise.resolve();
-            };
-            Element.prototype.webkitRequestFullscreen = Element.prototype.requestFullscreen;
-            Element.prototype.webkitRequestFullScreen = Element.prototype.requestFullscreen;
-            Document.prototype.exitFullscreen = function() {
-                window.webkit.messageHandlers.utvFullscreen.postMessage('toggle');
-                return Promise.resolve();
-            };
-            Document.prototype.webkitExitFullscreen = Document.prototype.exitFullscreen;
+            (function() {
+                const toggle = function() {
+                    window.webkit.messageHandlers.utvFullscreen.postMessage('toggle');
+                    return Promise.resolve();
+                };
+                Element.prototype.requestFullscreen = toggle;
+                Element.prototype.webkitRequestFullscreen = toggle;
+                Element.prototype.webkitRequestFullScreen = toggle;
+                HTMLVideoElement.prototype.webkitEnterFullscreen = toggle;
+                HTMLVideoElement.prototype.webkitEnterFullScreen = toggle;
+
+                Object.defineProperty(document, 'fullscreenEnabled', { get: () => true, configurable: true });
+                Object.defineProperty(document, 'webkitFullscreenEnabled', { get: () => true, configurable: true });
+
+                Document.prototype.exitFullscreen = toggle;
+                Document.prototype.webkitExitFullscreen = toggle;
+                Document.prototype.webkitCancelFullScreen = toggle;
+            })();
             """, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page)
         config.userContentController.addUserScript(fsOverride)
 
