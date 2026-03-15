@@ -1,5 +1,17 @@
 import Foundation
 
+struct VideoInfo {
+    let videoID: String
+    let title: String
+    let publishedAt: Date
+    let thumbnailURL: String?
+}
+
+struct ChannelFeedResult {
+    let channelName: String
+    let videos: [VideoInfo]
+}
+
 struct ChannelFeed {
     enum FeedError: LocalizedError {
         case invalidURL
@@ -47,7 +59,6 @@ struct ChannelFeed {
         }
 
         // Look for channel ID in meta tags or canonical URL
-        // Pattern: <meta itemprop="channelId" content="UCxxxxx">
         if let range = html.range(of: #"channelId"\s+content="(UC[a-zA-Z0-9_-]{22})"#, options: .regularExpression) {
             let match = html[range]
             if let idRange = match.range(of: #"UC[a-zA-Z0-9_-]{22}"#, options: .regularExpression) {
@@ -66,38 +77,52 @@ struct ChannelFeed {
         throw FeedError.parseError("Could not find channel ID on page")
     }
 
-    /// Fetch the latest video ID from a channel's RSS feed.
-    static func latestVideoID(channelID: String) async throws -> String {
+    /// Fetch all videos from a channel's RSS feed.
+    static func fetchFeed(channelID: String) async throws -> ChannelFeedResult {
         guard let url = URL(string: "https://www.youtube.com/feeds/videos.xml?channel_id=\(channelID)") else {
             throw FeedError.invalidURL
         }
 
         let (data, _) = try await URLSession.shared.data(from: url)
         let parser = FeedParser(data: data)
-        guard let videoID = parser.parse() else {
+        let result = parser.parseAll()
+        guard !result.videos.isEmpty else {
             throw FeedError.noVideoFound
         }
-        return videoID
+        return result
     }
 }
 
-/// Minimal Atom XML parser that extracts the first <yt:videoId>.
+/// Atom XML parser that extracts channel name and all video entries.
 private class FeedParser: NSObject, XMLParserDelegate {
     private let data: Data
-    private var videoID: String?
+    private var channelName = ""
+    private var videos: [VideoInfo] = []
+
+    // Parsing state
     private var currentElement = ""
     private var currentText = ""
-    private var done = false
+    private var insideEntry = false
+    private var entryVideoID = ""
+    private var entryTitle = ""
+    private var entryPublished = ""
+    private var entryThumbnailURL: String?
+
+    private static let iso8601: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
 
     init(data: Data) {
         self.data = data
     }
 
-    func parse() -> String? {
+    func parseAll() -> ChannelFeedResult {
         let parser = XMLParser(data: data)
         parser.delegate = self
         parser.parse()
-        return videoID
+        return ChannelFeedResult(channelName: channelName, videos: videos)
     }
 
     func parser(_ parser: XMLParser, didStartElement elementName: String,
@@ -105,6 +130,18 @@ private class FeedParser: NSObject, XMLParserDelegate {
                 attributes: [String: String] = [:]) {
         currentElement = elementName
         currentText = ""
+
+        if elementName == "entry" {
+            insideEntry = true
+            entryVideoID = ""
+            entryTitle = ""
+            entryPublished = ""
+            entryThumbnailURL = nil
+        }
+
+        if elementName == "media:thumbnail", let url = attributes["url"] {
+            entryThumbnailURL = url
+        }
     }
 
     func parser(_ parser: XMLParser, foundCharacters string: String) {
@@ -113,9 +150,34 @@ private class FeedParser: NSObject, XMLParserDelegate {
 
     func parser(_ parser: XMLParser, didEndElement elementName: String,
                 namespaceURI: String?, qualifiedName: String?) {
-        if elementName == "yt:videoId" && videoID == nil {
-            videoID = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
-            done = true
+        let text = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !insideEntry {
+            // Channel-level elements (before first <entry>)
+            if elementName == "name" && channelName.isEmpty {
+                channelName = text
+            }
+        } else {
+            switch elementName {
+            case "yt:videoId":
+                entryVideoID = text
+            case "title":
+                entryTitle = text
+            case "published":
+                entryPublished = text
+            case "entry":
+                let date = Self.iso8601.date(from: entryPublished) ?? .now
+                let video = VideoInfo(
+                    videoID: entryVideoID,
+                    title: entryTitle,
+                    publishedAt: date,
+                    thumbnailURL: entryThumbnailURL
+                )
+                videos.append(video)
+                insideEntry = false
+            default:
+                break
+            }
         }
     }
 }

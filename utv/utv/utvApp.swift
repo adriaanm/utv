@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct utvApp: App {
@@ -7,5 +8,6 @@ struct utvApp: App {
             ContentView()
         }
         .defaultSize(width: 1280, height: 800)
+        .modelContainer(for: [Channel.self, Video.self])
     }
 }
