@@ -5,11 +5,12 @@ struct VideoInfo {
     let title: String
     let publishedAt: Date
     let thumbnailURL: String?
+    var isShort: Bool = false
 }
 
 struct ChannelFeedResult {
     let channelName: String
-    let videos: [VideoInfo]
+    var videos: [VideoInfo]
 }
 
 struct ChannelFeed {
@@ -95,11 +96,48 @@ struct ChannelFeed {
 
         let (data, _) = try await URLSession.shared.data(from: url)
         let parser = FeedParser(data: data)
-        let result = parser.parseAll()
+        var result = parser.parseAll()
         guard !result.videos.isEmpty else {
             throw FeedError.noVideoFound
         }
+
+        // Detect shorts: /shorts/{id} stays on /shorts/ for real shorts,
+        // redirects to /watch?v= for regular videos.
+        let shortFlags = await detectShorts(videoIDs: result.videos.map(\.videoID))
+        for i in result.videos.indices {
+            result.videos[i].isShort = shortFlags[result.videos[i].videoID] ?? false
+        }
+
         return result
+    }
+
+    /// Check which video IDs are Shorts by requesting /shorts/{id} and seeing
+    /// if YouTube redirects to /watch (regular) or stays on /shorts (Short).
+    private static func detectShorts(videoIDs: [String]) async -> [String: Bool] {
+        await withTaskGroup(of: (String, Bool).self, returning: [String: Bool].self) { group in
+            let session = URLSession(configuration: .ephemeral)
+            for id in videoIDs {
+                group.addTask {
+                    guard let url = URL(string: "https://www.youtube.com/shorts/\(id)") else {
+                        return (id, false)
+                    }
+                    var request = URLRequest(url: url)
+                    request.httpMethod = "HEAD"
+                    request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
+                    guard let (_, response) = try? await session.data(for: request),
+                          let httpResponse = response as? HTTPURLResponse,
+                          let finalURL = httpResponse.url else {
+                        return (id, false)
+                    }
+                    return (id, finalURL.absoluteString.contains("/shorts/"))
+                }
+            }
+            var results: [String: Bool] = [:]
+            for await (id, isShort) in group {
+                results[id] = isShort
+            }
+            return results
+        }
     }
 }
 

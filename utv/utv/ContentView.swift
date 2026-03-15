@@ -273,7 +273,9 @@ struct VideoListView: View {
     }
 
     private var sortedVideos: [Video] {
-        channel.videos.sorted { $0.publishedAt > $1.publishedAt }
+        channel.videos
+            .filter { !$0.isShort }
+            .sorted { $0.publishedAt > $1.publishedAt }
     }
 
     var body: some View {

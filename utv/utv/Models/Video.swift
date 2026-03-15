@@ -7,6 +7,7 @@ final class Video {
     var title: String
     var publishedAt: Date
     var thumbnailURL: String?
+    var isShort: Bool = false
     var watched: Bool = false
     var watchedAt: Date?
     var lastPosition: Double = 0

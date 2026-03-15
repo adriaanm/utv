@@ -37,6 +37,7 @@ final class FeedService {
                 publishedAt: info.publishedAt,
                 thumbnailURL: info.thumbnailURL
             )
+            video.isShort = info.isShort
             video.channel = channel
             modelContext.insert(video)
         }
@@ -58,6 +59,7 @@ final class FeedService {
                 publishedAt: info.publishedAt,
                 thumbnailURL: info.thumbnailURL
             )
+            video.isShort = info.isShort
             video.channel = channel
             modelContext.insert(video)
         }
@@ -107,6 +109,7 @@ final class FeedService {
                 publishedAt: info.publishedAt,
                 thumbnailURL: info.thumbnailURL
             )
+            video.isShort = info.isShort
             video.channel = channel
             modelContext.insert(video)
         }
@@ -126,6 +129,7 @@ final class FeedService {
                 publishedAt: info.publishedAt,
                 thumbnailURL: info.thumbnailURL
             )
+            video.isShort = info.isShort
             video.channel = channel
             modelContext.insert(video)
         }
