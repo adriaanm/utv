@@ -13,6 +13,18 @@ struct WebPlayerView: NSViewRepresentable {
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+
+        // Set consent cookie to bypass GDPR dialog
+        let consentCookie = HTTPCookie(properties: [
+            .domain: ".youtube.com",
+            .path: "/",
+            .name: "SOCS",
+            .value: "CAISNQgDEitib3FfaWRlbnRpdHlmcm9udGVuZHVpc2VydmVyXzIwMjMwODI5LjA3X3AxGgJlbiACGgYIgJnPpwY",
+            .secure: "TRUE",
+            .expires: Date.distantFuture,
+        ])!
+        webView.configuration.websiteDataStore.httpCookieStore.setCookie(consentCookie)
+
         context.coordinator.webView = webView
         return webView
     }

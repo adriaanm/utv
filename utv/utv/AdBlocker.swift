@@ -20,7 +20,7 @@ struct AdBlocker {
     private static func compileContentRules(for controller: WKUserContentController) {
         guard let url = Bundle.main.url(forResource: "content-rules", withExtension: "json"),
               let jsonString = try? String(contentsOf: url, encoding: .utf8) else {
-            print("[AdBlocker] content-rules.json not found")
+            NSLog("[AdBlocker] content-rules.json not found")
             return
         }
 
@@ -29,12 +29,12 @@ struct AdBlocker {
             encodedContentRuleList: jsonString
         ) { ruleList, error in
             if let error = error {
-                print("[AdBlocker] Failed to compile content rules: \(error)")
+                NSLog("[AdBlocker] Failed to compile content rules: \(error)")
                 return
             }
             if let ruleList = ruleList {
                 controller.add(ruleList)
-                print("[AdBlocker] Content rules compiled and loaded")
+                NSLog("[AdBlocker] Content rules compiled and loaded")
             }
         }
     }
@@ -75,7 +75,8 @@ struct AdBlocker {
         let script = WKUserScript(
             source: js,
             injectionTime: .atDocumentStart,
-            forMainFrameOnly: false
+            forMainFrameOnly: false,
+            in: .page
         )
         controller.addUserScript(script)
     }
@@ -85,20 +86,23 @@ struct AdBlocker {
     private static func injectScriptlets(into controller: WKUserContentController) {
         guard let url = Bundle.main.url(forResource: "ubo-scriptlets", withExtension: "js"),
               let bundle = try? String(contentsOf: url, encoding: .utf8) else {
-            print("[AdBlocker] ubo-scriptlets.js not found — run 'just sync' first")
+            NSLog("[AdBlocker] ubo-scriptlets.js not found — run 'just sync' first")
             return
         }
 
         // The uBO scriptlet bundle is a self-contained IIFE that reads document.location
         // to determine which scriptlets to run. On youtube.com it will automatically
         // activate json-prune, prevent-fetch, prevent-xhr etc. to strip ad payloads.
+        // CRITICAL: Must inject into .page world so scriptlets can intercept the page's
+        // fetch/XHR/JSON.parse — the default .defaultClient world is isolated.
         let script = WKUserScript(
             source: bundle,
             injectionTime: .atDocumentStart,
-            forMainFrameOnly: false
+            forMainFrameOnly: false,
+            in: .page
         )
         controller.addUserScript(script)
-        print("[AdBlocker] Scriptlet bundle injected (\(bundle.count) bytes)")
+        NSLog("[AdBlocker] Scriptlet bundle injected (\(bundle.count) bytes)")
     }
 }
 

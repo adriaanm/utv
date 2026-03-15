@@ -12,10 +12,6 @@ targets:
     platform: macOS
     sources:
       - path: utv
-        excludes:
-          - Resources/**
-    resources:
-      - path: utv/Resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.utv.app
