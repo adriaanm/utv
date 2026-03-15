@@ -18,8 +18,8 @@ struct utvApp: App {
                 .task {
                     await consentManager.ensureConsent()
                 }
-                .sheet(isPresented: $consentManager.showConsentSheet) {
-                    consentSheet
+                .sheet(item: $consentManager.consentRequest) { request in
+                    consentSheet(query: request.searchQuery)
                 }
                 #endif
         }
@@ -30,7 +30,7 @@ struct utvApp: App {
                 Button("Clear Cookies & Re-consent") {
                     Task {
                         await consentManager.clearAllCookies()
-                        consentManager.showConsentSheet = true
+                        consentManager.consentRequest = ConsentRequest(searchQuery: nil)
                     }
                 }
             }
@@ -40,7 +40,7 @@ struct utvApp: App {
     }
 
     #if canImport(WebKit)
-    private var consentSheet: some View {
+    private func consentSheet(query: String?) -> some View {
         VStack(spacing: 0) {
             HStack {
                 VStack(alignment: .leading) {
@@ -60,7 +60,7 @@ struct utvApp: App {
 
             Divider()
 
-            ConsentWebView(searchQuery: consentManager.consentSearchQuery)
+            ConsentWebView(searchQuery: query)
         }
         .frame(minWidth: 600, idealWidth: 700, minHeight: 500, idealHeight: 600)
     }

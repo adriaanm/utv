@@ -4,6 +4,13 @@ import Foundation
 import WebKit
 import SwiftUI
 
+/// Identifies a consent sheet presentation. Using an `Identifiable` item
+/// instead of a plain `Bool` ensures SwiftUI always presents a fresh sheet.
+struct ConsentRequest: Identifiable {
+    let id = UUID()
+    let searchQuery: String?
+}
+
 /// Manages the YouTube GDPR consent cookie (SOCS) dynamically.
 ///
 /// On first launch (or after clearing cookies), shows a sheet with YouTube's
@@ -17,10 +24,8 @@ final class ConsentManager {
     private static let defaultsKey = "consent.socs"
     private static let cookieDomain = ".youtube.com"
 
-    var showConsentSheet = false
-    /// Optional search query to load in the consent web view (e.g. a channel name).
-    /// YouTube shows the consent banner when navigating to search results.
-    var consentSearchQuery: String?
+    /// Set to a non-nil value to present the consent sheet.
+    var consentRequest: ConsentRequest?
 
     var socsCookieValue: String? {
         get { UserDefaults.standard.string(forKey: Self.defaultsKey) }
@@ -41,15 +46,14 @@ final class ConsentManager {
 
     /// Ensure we have a consent cookie. If one exists, re-inject it into the shared
     /// WKWebView cookie store. Otherwise, show the consent sheet.
-    /// Pass a `searchQuery` to load a YouTube search in the consent view
+    /// Pass a `searchQuery` to navigate to that channel in the consent view
     /// (YouTube only shows the consent banner on actual page navigations).
     func ensureConsent(searchQuery: String? = nil) async {
         if let value = socsCookieValue {
             await injectCookie(value: value)
             return
         }
-        consentSearchQuery = searchQuery
-        showConsentSheet = true
+        consentRequest = ConsentRequest(searchQuery: searchQuery)
     }
 
     /// Add SOCS cookie header to a URLRequest (for URLSession callers).
@@ -71,7 +75,7 @@ final class ConsentManager {
         if let socs = cookies.first(where: { $0.name == "SOCS" && $0.domain.contains("youtube") }) {
             socsCookieValue = socs.value
         }
-        showConsentSheet = false
+        consentRequest = nil
     }
 
     /// Clear stored consent and all WKWebView data (for testing / re-consent).
