@@ -19,23 +19,50 @@ struct utvApp: App {
                     await consentManager.ensureConsent()
                 }
                 .sheet(isPresented: $consentManager.showConsentSheet) {
-                    VStack {
-                        Text("YouTube requires consent")
-                            .font(.headline)
-                            .padding(.top)
-                        Text("Please accept or reject cookies to continue.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        ConsentWebView()
-                            .frame(minWidth: 500, minHeight: 400)
-                    }
-                    .padding()
+                    consentSheet
                 }
                 #endif
         }
         #if os(macOS)
         .defaultSize(width: 1280, height: 800)
+        .commands {
+            CommandGroup(after: .appSettings) {
+                Button("Clear Cookies & Re-consent") {
+                    Task {
+                        await consentManager.clearAllCookies()
+                        consentManager.showConsentSheet = true
+                    }
+                }
+            }
+        }
         #endif
         .modelContainer(for: [Channel.self, Video.self])
     }
+
+    #if canImport(WebKit)
+    private var consentSheet: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("YouTube Consent")
+                        .font(.headline)
+                    Text("Accept or reject cookies, then click Done.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Done") {
+                    Task { await consentManager.finishConsent() }
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+            .padding()
+
+            Divider()
+
+            ConsentWebView()
+        }
+        .frame(minWidth: 600, idealWidth: 700, minHeight: 500, idealHeight: 600)
+    }
+    #endif
 }
