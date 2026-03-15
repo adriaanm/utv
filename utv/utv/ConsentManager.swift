@@ -120,10 +120,11 @@ extension ConsentWebView {
         let config = WKWebViewConfiguration()
         let wv = WKWebView(frame: .zero, configuration: config)
         let url: URL
-        if let q = searchQuery?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed), !q.isEmpty {
-            url = URL(string: "https://www.youtube.com/results?search_query=\(q)")!
+        if let q = searchQuery, !q.isEmpty {
+            let handle = q.hasPrefix("@") ? q : "@\(q)"
+            url = URL(string: "https://www.youtube.com/\(handle)")!
         } else {
-            url = URL(string: "https://www.youtube.com/results?search_query=music")!
+            url = URL(string: "https://www.youtube.com/@martijndoolaard")!
         }
         wv.load(URLRequest(url: url))
         return wv
