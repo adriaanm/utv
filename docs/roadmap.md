@@ -4,7 +4,7 @@
 
 Start with macOS, port to tvOS later. macOS gives us Safari Web Inspector for debugging content blockers, faster iteration, and no provisioning hassle. The core WebKit content blocking API is identical on both platforms.
 
-## Phase 1: macOS proof-of-concept
+## Phase 1: macOS proof-of-concept [done]
 
 Goal: play the latest video from a given YouTube channel with ads blocked.
 
@@ -14,7 +14,6 @@ Goal: play the latest video from a given YouTube channel with ads blocked.
 - [x] Inject full uBOL scriptlet bundle (`ubo-scriptlets.js`) via `WKUserScript` at document start
 - [x] CSS hiding rules for ad UI elements
 - [x] Test against YouTube — pre-roll ads blocked, cookie consent bypassed
-- [ ] Handle YouTube's anti-adblock detection if needed
 
 Key findings:
 - Chrome DNR rulesets from uBOL-home aren't WebKit-compatible, but the **scriptlet bundle** is self-contained and works in any browser context. It strips `adPlacements`, `adSlots`, `playerAds` from YouTube API responses via json-prune/prevent-fetch/prevent-xhr.
@@ -27,21 +26,22 @@ Key findings:
 - [x] RSS feed parsing (`ChannelFeed.swift`) to find latest video from channel ID
 - [x] Resolve @handles and full URLs to channel IDs
 - [x] Auto-play latest video in WebView
-- [ ] Basic transport controls (may get these for free from the web player)
 
 ### 1c. Package as macOS app
 
 - [x] Xcode project (generated via xcodegen from `project.yml`)
 - [x] SwiftUI app with channel input + WebPlayerView
 - [x] `just sync` / `just build` / `just run` recipes
-- [x] Test with real channels — verified with SimonFordman channel
 
-## Phase 2: make it actually usable (macOS)
+## Phase 2: usable macOS app [done]
 
-- [ ] Channel list / subscription management
-- [ ] Browse recent videos per channel
-- [ ] Background filter updates (re-run sync, recompile rules)
-- [ ] Persist state (last watched, subscriptions)
+- [x] Channel subscriptions — add by @handle, persist with SwiftData
+- [x] Video list — browse recent videos per channel, thumbnails, unread badges
+- [x] NavigationSplitView — sidebar collapses on play, restores on back
+- [x] Player maximization — CSS injection hides YouTube chrome, fills viewport
+- [x] Playback position tracking — resume where you left off, progress bars
+- [x] Open in browser — for liking/commenting (no login in app)
+- [x] Feed refresh — on launch + manual toolbar button
 
 ## Phase 3: tvOS port
 
@@ -50,8 +50,18 @@ Key findings:
 - [ ] TV-appropriate layout (10-foot UI)
 - [ ] TestFlight distribution
 
+## Ad blocking maintenance
+
+This is a personal-use app. We don't need automated filter pipelines — just a manual process for when YouTube changes break ad blocking. See [docs/ubo-tracking.md](ubo-tracking.md) for the full workflow.
+
+**TL;DR**: Three layers, maintained independently:
+1. **Scriptlet bundle** (`ubo-scriptlets.js`) — `just sync` pulls latest from uBOL-home. This is the heavy lifter.
+2. **Content rules** (`content-rules.json`) — hand-written WebKit blocker rules for ad domains/URLs. Edit manually.
+3. **CSS hiding** (in `AdBlocker.swift`) — hides ad UI elements. Edit manually.
+
+When ads start appearing: run `just sync`, test, and if needed update the content rules or CSS by checking uAssets upstream diffs.
+
 ## Open questions
 
 - Can `WKContentRuleList` handle the full uBO ruleset size, or do we need to trim? (WebKit has a 50k rule limit per list, but allows multiple lists)
-- ~~Do the scriptlet injections work reliably in WKWebView, or does YouTube detect the injection method?~~ **Yes, confirmed working.** Must use `WKContentWorld.page`.
-- Is the YouTube RSS feed reliable enough for "latest video", or do we need the Data API?
+- Is the YouTube RSS feed reliable enough, or do we need the Data API? (So far: reliable, 15 most recent videos)

@@ -19,3 +19,28 @@ run: build
 # Clean build artifacts
 clean:
     xcodebuild -project utv/utv.xcodeproj -scheme utv clean
+
+# Show YouTube-relevant filter changes since last submodule update
+diff-filters:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd third_party/uAssets
+    YT='youtube\.com|youtube-nocookie\.com|youtubei\.googleapis\.com|googlevideo\.com|ytimg\.com'
+    echo "==> YouTube-relevant changes in uAssets filters:"
+    git diff HEAD@{1}..HEAD -- filters/ | grep -E "^[+-].*($YT)" | head -80 || echo "  (no YouTube-related changes)"
+    echo ""
+    echo "==> Changed filter files:"
+    git diff HEAD@{1}..HEAD --stat -- filters/ || echo "  (no changes)"
+
+# Show current scriptlet bundle version and size
+adblock-status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "==> Scriptlet bundle:"
+    ls -lh utv/utv/Resources/ubo-scriptlets.js 2>/dev/null || echo "  NOT FOUND — run 'just sync'"
+    echo ""
+    echo "==> Content rules:"
+    jq length utv/utv/Resources/content-rules.json 2>/dev/null && echo "  rules in content-rules.json" || echo "  NOT FOUND"
+    echo ""
+    echo "==> Submodule versions:"
+    git submodule status --cached | sed 's/^/  /'

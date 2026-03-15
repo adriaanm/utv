@@ -1,58 +1,80 @@
-# uBlock Origin Tracking
+# Ad Blocking: How It Works and How to Update
 
-We track three upstream uBlock Origin repositories as git submodules to stay current with YouTube ad-blocking filter lists, pre-compiled rulesets, and scriptlets.
+## Architecture
+
+Ad blocking uses three layers, all configured in `AdBlocker.swift`:
+
+| Layer | File | What it does | How to update |
+|-------|------|-------------|---------------|
+| Scriptlet bundle | `utv/utv/Resources/ubo-scriptlets.js` | Intercepts `fetch`/`XHR`/`JSON.parse` to strip ad payloads from YouTube API responses | `just sync` |
+| Content rules | `utv/utv/Resources/content-rules.json` | WebKit content blocker — blocks network requests to ad domains | Edit manually |
+| CSS hiding | `AdBlocker.swift` | Hides ad-related DOM elements | Edit manually |
+
+The scriptlet bundle does the heavy lifting. It's a pre-compiled IIFE from the uBOL-home repo that activates `json-prune`, `prevent-fetch`, `prevent-xhr` etc. specifically for youtube.com. The content rules and CSS are a safety net for anything the scriptlets miss.
 
 ## Submodules
 
-| Submodule | Source | What it provides |
-|-----------|--------|------------------|
-| `third_party/uAssets` | [uBlockOrigin/uAssets](https://github.com/uBlockOrigin/uAssets) | Raw filter lists in ABP syntax (`filters/filters.txt`, `filters/privacy.txt`, etc.) |
-| `third_party/uBOL-home` | [uBlockOrigin/uBOL-home](https://github.com/uBlockOrigin/uBOL-home) | Pre-compiled declarativeNetRequest rulesets in `chromium/rulesets/` (JSON rules + scriptlet injections) |
-| `third_party/uBlock` | [gorhill/uBlock](https://github.com/gorhill/uBlock) | Scriptlet source in `src/js/resources/` (json-prune, prevent-fetch, prevent-xhr, etc.) |
+We track upstream uBO repos as git submodules for reference:
 
-## Sync script
+| Submodule | Repo | Purpose |
+|-----------|------|---------|
+| `third_party/uAssets` | [uBlockOrigin/uAssets](https://github.com/uBlockOrigin/uAssets) | Raw filter lists — useful for understanding what changed when ads break through |
+| `third_party/uBOL-home` | [uBlockOrigin/uBOL-home](https://github.com/uBlockOrigin/uBOL-home) | Pre-compiled scriptlet bundle — this is what we actually ship |
+| `third_party/uBlock` | [gorhill/uBlock](https://github.com/gorhill/uBlock) | Scriptlet source code — reference only |
 
-`scripts/sync-ubo.sh` updates all submodules and extracts YouTube-relevant content into `AdsFilters/`:
+## When ads start getting through
 
+1. **Update the scriptlet bundle first** — this fixes most breakage:
+   ```sh
+   just sync        # pulls latest submodules, copies scriptlet bundle
+   just build       # rebuild with new bundle
+   just run         # test
+   ```
+
+2. **If ads still appear**, check what changed upstream:
+   ```sh
+   just diff-filters   # shows YouTube-relevant filter changes in uAssets
+   ```
+   Look for new domains or URL patterns → add them to `content-rules.json`.
+   Look for new CSS selectors → add them to the CSS hiding section in `AdBlocker.swift`.
+
+3. **If a specific ad format is new**, use Safari Web Inspector on the running app:
+   - Develop menu → utv → Web Inspector
+   - Network tab: find ad requests that aren't blocked
+   - Elements tab: find ad DOM elements that aren't hidden
+   - Add rules to `content-rules.json` or CSS in `AdBlocker.swift`
+
+## content-rules.json format
+
+WebKit content blocker JSON. Each rule has a trigger (URL pattern) and action (block/css-display-none):
+
+```json
+{
+    "trigger": { "url-filter": "doubleclick\\.net" },
+    "action": { "type": "block" }
+}
 ```
-AdsFilters/
-├── filters/       YouTube-specific rules + full core filter lists
-├── rulesets/       Pre-compiled declarativeNetRequest JSON + scriptlet injections
-└── scriptlets/    Key uBlock scriptlet source files
+
+See [WebKit Content Blockers docs](https://developer.apple.com/documentation/safariservices/creating-a-content-blocker) for the full spec. Limit: 50,000 rules per list.
+
+## Scriptlet bundle details
+
+The bundle at `ubo-scriptlets.js` is sourced from:
+```
+third_party/uBOL-home/chromium/rulesets/scripting/scriptlet/main/ublock-filters.js
 ```
 
-Run it:
+It's a self-contained IIFE that checks `document.location` and activates the right scriptlets per-site. On youtube.com it runs:
+- `json-prune` — strips `adPlacements`, `adSlots`, `playerAds` from API JSON responses
+- `prevent-fetch` — blocks fetch requests to ad endpoints
+- `prevent-xhr` — blocks XHR requests to ad endpoints
 
-```sh
-./scripts/sync-ubo.sh
-```
-
-The script:
-1. Pulls latest from all three submodules (`git submodule update --remote --merge`)
-2. Greps uAssets filter lists for YouTube-related domains (`youtube.com`, `googlevideo.com`, `ytimg.com`, etc.)
-3. Copies core pre-compiled rulesets and scriptlet injections from uBOL-home
-4. Copies key scriptlet source files from uBlock
-
-`AdsFilters/` is gitignored — it's derived output, regenerated on each sync.
+**Critical**: Must be injected into `WKContentWorld.page` (not `.defaultClient`) so it can intercept the page's native `fetch`/`XHR`/`JSON.parse`.
 
 ## Initial setup
 
 ```sh
 git submodule update --init --recursive
-./scripts/sync-ubo.sh
+just sync
+just build
 ```
-
-## Checking for upstream changes
-
-```sh
-git submodule update --remote
-git diff third_party/   # shows what changed
-```
-
-## Why these three repos
-
-YouTube ad patterns change frequently. uBlock Origin is the most actively maintained filter set targeting YouTube. By tracking all three repos we get:
-
-- **uAssets**: the source-of-truth filter rules, useful for understanding what's being blocked and writing custom rules
-- **uBOL-home**: ready-to-use declarativeNetRequest JSON rulesets (the format WebKit content blockers consume) — avoids us having to compile ABP syntax ourselves
-- **uBlock**: the scriptlet implementations needed for JS-level ad blocking (e.g. intercepting fetch/XHR requests to ad servers, pruning ad config from JSON responses)
