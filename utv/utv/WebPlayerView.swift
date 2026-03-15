@@ -4,6 +4,8 @@ import WebKit
 struct WebPlayerView: NSViewRepresentable {
     let videoID: String?
     var maximized: Bool = false
+    var startAt: Double = 0
+    var onPositionUpdate: ((Double, Double) -> Void)?
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -11,6 +13,9 @@ struct WebPlayerView: NSViewRepresentable {
         config.mediaTypesRequiringUserActionForPlayback = []
 
         AdBlocker.configure(config)
+
+        // Message handler for position tracking
+        config.userContentController.add(context.coordinator, name: "utvPosition")
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
@@ -28,15 +33,18 @@ struct WebPlayerView: NSViewRepresentable {
 
         context.coordinator.webView = webView
         context.coordinator.maximized = maximized
+        context.coordinator.onPositionUpdate = onPositionUpdate
         webView.navigationDelegate = context.coordinator
         return webView
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
         context.coordinator.maximized = maximized
+        context.coordinator.onPositionUpdate = onPositionUpdate
 
         guard let videoID = videoID,
               videoID != context.coordinator.currentVideoID else { return }
+        context.coordinator.startAt = startAt
         context.coordinator.load(videoID: videoID)
     }
 
@@ -44,10 +52,12 @@ struct WebPlayerView: NSViewRepresentable {
         Coordinator()
     }
 
-    class Coordinator: NSObject, WKNavigationDelegate {
+    class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         weak var webView: WKWebView?
         var currentVideoID: String?
         var maximized = false
+        var startAt: Double = 0
+        var onPositionUpdate: ((Double, Double) -> Void)?
 
         func load(videoID: String) {
             currentVideoID = videoID
@@ -56,17 +66,36 @@ struct WebPlayerView: NSViewRepresentable {
             webView.load(URLRequest(url: url))
         }
 
+        func pause() {
+            webView?.evaluateJavaScript("document.querySelector('video')?.pause()")
+        }
+
+        // MARK: - WKScriptMessageHandler
+
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
+            guard message.name == "utvPosition",
+                  let body = message.body as? [String: Double],
+                  let pos = body["currentTime"],
+                  let dur = body["duration"],
+                  dur > 0 else { return }
+            onPositionUpdate?(pos, dur)
+        }
+
         // MARK: - WKNavigationDelegate
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             if maximized {
                 injectMaximizeCSS(webView)
+                injectPositionTracker(webView)
+                if startAt > 0 {
+                    seekTo(startAt, in: webView)
+                }
             }
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                       decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            // Allow the initial load and same-page navigations
             guard let url = navigationAction.request.url else {
                 decisionHandler(.allow)
                 return
@@ -84,7 +113,46 @@ struct WebPlayerView: NSViewRepresentable {
             decisionHandler(.allow)
         }
 
-        // MARK: - CSS Injection
+        // MARK: - JS Injection
+
+        private func seekTo(_ seconds: Double, in webView: WKWebView) {
+            let js = """
+            (function() {
+                function trySeek() {
+                    const v = document.querySelector('video');
+                    if (v && v.readyState >= 1) { v.currentTime = \(seconds); }
+                    else { setTimeout(trySeek, 500); }
+                }
+                trySeek();
+            })();
+            """
+            webView.evaluateJavaScript(js)
+            // Retry after SPA hydration
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak webView] in
+                webView?.evaluateJavaScript(js)
+            }
+        }
+
+        private func injectPositionTracker(_ webView: WKWebView) {
+            let js = """
+            (function() {
+                if (window._utvTracker) return;
+                window._utvTracker = setInterval(function() {
+                    const v = document.querySelector('video');
+                    if (v && v.duration) {
+                        window.webkit.messageHandlers.utvPosition.postMessage({
+                            currentTime: v.currentTime,
+                            duration: v.duration
+                        });
+                    }
+                }, 3000);
+            })();
+            """
+            webView.evaluateJavaScript(js)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak webView] in
+                webView?.evaluateJavaScript(js)
+            }
+        }
 
         private func injectMaximizeCSS(_ webView: WKWebView) {
             let css = """
@@ -125,7 +193,6 @@ struct WebPlayerView: NSViewRepresentable {
                 }
                 style.textContent = `\(css.replacingOccurrences(of: "\n", with: " "))`;
 
-                // Force theater mode and hide controls after a delay
                 const player = document.getElementById('movie_player');
                 if (player && player.setInternalSize) {
                     player.setInternalSize();

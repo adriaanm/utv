@@ -9,6 +9,8 @@ final class Video {
     var thumbnailURL: String?
     var watched: Bool = false
     var watchedAt: Date?
+    var lastPosition: Double = 0
+    var duration: Double = 0
     var channel: Channel?
 
     init(videoID: String, title: String, publishedAt: Date, thumbnailURL: String? = nil) {

@@ -26,6 +26,13 @@ struct ContentView: View {
         .task {
             await refreshAll()
         }
+        .onChange(of: selectedChannel) { _, newValue in
+            // Selecting a channel while playing pauses video and shows channel list
+            if newValue != nil && playingVideo != nil {
+                playingVideo = nil
+                columnVisibility = .automatic
+            }
+        }
     }
 
     // MARK: - Sidebar
@@ -195,9 +202,24 @@ struct VideoListView: View {
                 VideoRow(video: video)
                     .contentShape(Rectangle())
                     .onTapGesture { onPlay(video) }
+                    .contextMenu {
+                        Button("Open in Browser") {
+                            openInBrowser(video)
+                        }
+                        if video.lastPosition > 0 {
+                            Button("Resume at \(formatTime(video.lastPosition))") {
+                                onPlay(video)
+                            }
+                        }
+                    }
             }
         }
         .navigationTitle(channel.displayName)
+    }
+
+    private func openInBrowser(_ video: Video) {
+        let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
+        NSWorkspace.shared.open(url)
     }
 }
 
@@ -221,9 +243,30 @@ struct VideoRow: View {
                 Text(video.title)
                     .fontWeight(video.watched ? .regular : .semibold)
                     .lineLimit(2)
-                Text(video.publishedAt, style: .relative)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    Text(video.publishedAt, style: .relative)
+                    if video.lastPosition > 0 && video.duration > 0 {
+                        Text("·")
+                        Text("\(formatTime(video.lastPosition)) / \(formatTime(video.duration))")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                // Progress bar for partially watched
+                if video.lastPosition > 0 && video.duration > 0 {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Rectangle().fill(.quaternary)
+                            Rectangle()
+                                .fill(.blue)
+                                .frame(width: geo.size.width * min(video.lastPosition / video.duration, 1.0))
+                        }
+                    }
+                    .frame(height: 3)
+                    .clipShape(Capsule())
+                }
             }
 
             Spacer()
@@ -246,8 +289,15 @@ struct PlayerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            WebPlayerView(videoID: video.videoID, maximized: true)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            WebPlayerView(
+                videoID: video.videoID,
+                maximized: true,
+                startAt: video.lastPosition
+            ) { position, duration in
+                video.lastPosition = position
+                video.duration = duration
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             HStack {
                 Button {
@@ -263,6 +313,14 @@ struct PlayerView: View {
 
                 Spacer()
 
+                Button {
+                    let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
+                    NSWorkspace.shared.open(url)
+                } label: {
+                    Label("Open in Browser", systemImage: "safari")
+                }
+                .buttonStyle(.borderless)
+
                 Text(video.publishedAt, style: .date)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -272,4 +330,17 @@ struct PlayerView: View {
             .background(.bar)
         }
     }
+}
+
+// MARK: - Helpers
+
+func formatTime(_ seconds: Double) -> String {
+    let s = Int(seconds)
+    let h = s / 3600
+    let m = (s % 3600) / 60
+    let sec = s % 60
+    if h > 0 {
+        return String(format: "%d:%02d:%02d", h, m, sec)
+    }
+    return String(format: "%d:%02d", m, sec)
 }
