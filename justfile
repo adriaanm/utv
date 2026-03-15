@@ -1,4 +1,4 @@
-# utv — macOS YouTube viewer with ad blocking
+# utv — YouTube viewer with ad blocking (macOS + tvOS)
 
 # Update submodules and copy scriptlet bundle into app Resources
 sync:
@@ -15,6 +15,10 @@ build:
 # Build and run
 run: build
     open "$(xcodebuild -project utv/utv.xcodeproj -scheme utv -configuration Debug -showBuildSettings 2>/dev/null | grep ' BUILT_PRODUCTS_DIR' | awk '{print $3}')/utv.app"
+
+# Build tvOS app (debug, simulator)
+build-tv:
+    xcodebuild -project utv/utv.xcodeproj -scheme utv-tv -configuration Debug -destination 'platform=tvOS Simulator,name=Apple TV' build
 
 # Clean build artifacts
 clean:
