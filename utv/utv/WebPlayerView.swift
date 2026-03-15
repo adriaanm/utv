@@ -1,15 +1,40 @@
 import SwiftUI
+
+#if canImport(WebKit)
 import WebKit
 
+#if os(macOS)
 struct WebPlayerView: NSViewRepresentable {
     let videoID: String?
     var maximized: Bool = false
     var startAt: Double = 0
     var onPositionUpdate: ((Double, Double) -> Void)?
 
-    func makeNSView(context: Context) -> WKWebView {
+    func makeNSView(context: Context) -> WKWebView { makeWebView(context: context) }
+    func updateNSView(_ webView: WKWebView, context: Context) { updateWebView(webView, context: context) }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+}
+#else
+struct WebPlayerView: UIViewRepresentable {
+    let videoID: String?
+    var maximized: Bool = false
+    var startAt: Double = 0
+    var onPositionUpdate: ((Double, Double) -> Void)?
+
+    func makeUIView(context: Context) -> WKWebView { makeWebView(context: context) }
+    func updateUIView(_ webView: WKWebView, context: Context) { updateWebView(webView, context: context) }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+}
+#endif
+
+// MARK: - Shared Implementation
+
+extension WebPlayerView {
+    func makeWebView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
+        #if os(macOS)
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+        #endif
         config.mediaTypesRequiringUserActionForPlayback = []
 
         AdBlocker.configure(config)
@@ -19,8 +44,6 @@ struct WebPlayerView: NSViewRepresentable {
         config.userContentController.add(context.coordinator, name: "utvFullscreen")
 
         // Override fullscreen API at document start, before YouTube captures references.
-        // YouTube uses HTMLVideoElement.webkitEnterFullscreen (not Element.requestFullscreen),
-        // so we must override all variants.
         let fsOverride = WKUserScript(source: """
             (function() {
                 const toggle = function() {
@@ -64,7 +87,7 @@ struct WebPlayerView: NSViewRepresentable {
         return webView
     }
 
-    func updateNSView(_ webView: WKWebView, context: Context) {
+    func updateWebView(_ webView: WKWebView, context: Context) {
         context.coordinator.maximized = maximized
         context.coordinator.onPositionUpdate = onPositionUpdate
 
@@ -73,11 +96,11 @@ struct WebPlayerView: NSViewRepresentable {
         context.coordinator.startAt = startAt
         context.coordinator.load(videoID: videoID)
     }
+}
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
+// MARK: - Coordinator
 
+extension WebPlayerView {
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         weak var webView: WKWebView?
         var currentVideoID: String?
@@ -105,9 +128,11 @@ struct WebPlayerView: NSViewRepresentable {
         func userContentController(_ userContentController: WKUserContentController,
                                    didReceive message: WKScriptMessage) {
             if message.name == "utvFullscreen" {
+                #if os(macOS)
                 if let window = webView?.window {
                     window.toggleFullScreen(nil)
                 }
+                #endif
                 return
             }
 
@@ -153,8 +178,6 @@ struct WebPlayerView: NSViewRepresentable {
         // MARK: - JS Injection
 
         private func seekTo(_ seconds: Double, in webView: WKWebView) {
-            // Seek to target, retrying only if YouTube resets position back to 0.
-            // Stop retrying once playback has progressed past the target.
             let js = """
             (function() {
                 const target = \(seconds);
@@ -169,7 +192,6 @@ struct WebPlayerView: NSViewRepresentable {
                         return;
                     }
                     if (v.currentTime >= target - 2) {
-                        // Position is at or past target — playback is progressing normally
                         settled = true;
                         return;
                     }
@@ -264,3 +286,21 @@ struct WebPlayerView: NSViewRepresentable {
         }
     }
 }
+
+#else
+// tvOS: WebKit is not available. Placeholder until a native player is implemented.
+struct WebPlayerView: View {
+    let videoID: String?
+    var maximized: Bool = false
+    var startAt: Double = 0
+    var onPositionUpdate: ((Double, Double) -> Void)?
+
+    var body: some View {
+        ContentUnavailableView(
+            "Playback Not Yet Available",
+            systemImage: "tv",
+            description: Text("WebKit is not available on tvOS. A native player will be added in a future update.")
+        )
+    }
+}
+#endif

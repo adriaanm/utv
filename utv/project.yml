@@ -32,3 +32,16 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
+
+  utv-tv:
+    type: application
+    platform: tvOS
+    sources:
+      - path: utv
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.utv.tv
+        PRODUCT_NAME: utv
+        SWIFT_VERSION: "5.9"
+        TVOS_DEPLOYMENT_TARGET: "17.0"
+        GENERATE_INFOPLIST_FILE: YES

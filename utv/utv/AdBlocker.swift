@@ -1,3 +1,4 @@
+#if canImport(WebKit)
 import WebKit
 
 struct AdBlocker {
@@ -118,3 +119,4 @@ private extension String {
         return "`\(escaped)`"
     }
 }
+#endif

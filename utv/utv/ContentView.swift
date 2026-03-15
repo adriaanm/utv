@@ -35,7 +35,6 @@ struct ContentView: View {
             }
         }
         .onChange(of: selectedChannel) { _, newValue in
-            // Selecting a channel while playing pauses video and shows channel list
             if newValue != nil && playingVideo != nil {
                 playingVideo = nil
                 columnVisibility = .automatic
@@ -50,7 +49,9 @@ struct ContentView: View {
             Section {
                 HStack {
                     TextField("@handle", text: $handleInput)
+                        #if os(macOS)
                         .textFieldStyle(.roundedBorder)
+                        #endif
                         .onSubmit { addChannel() }
                     Button {
                         addChannel()
@@ -82,7 +83,9 @@ struct ContentView: View {
                 .onDelete(perform: deleteChannels)
             }
         }
+        #if os(macOS)
         .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
+        #endif
         .toolbar {
             ToolbarItem {
                 Button {
@@ -214,24 +217,27 @@ struct VideoListView: View {
     var body: some View {
         List {
             ForEach(sortedVideos) { video in
-                VideoRow(video: video)
-                    .contentShape(Rectangle())
-                    .onTapGesture { onPlay(video) }
-                    .contextMenu {
-                        Button("Open in Browser") {
-                            openInBrowser(video)
-                        }
-                        if video.lastPosition > 0 {
-                            Button("Resume at \(formatTime(video.lastPosition))") {
-                                onPlay(video)
-                            }
+                Button { onPlay(video) } label: {
+                    VideoRow(video: video)
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    #if os(macOS)
+                    Button("Open in Browser") {
+                        openInBrowser(video)
+                    }
+                    #endif
+                    if video.lastPosition > 0 {
+                        Button("Resume at \(formatTime(video.lastPosition))") {
+                            onPlay(video)
                         }
                     }
-                    .onAppear {
-                        if video.videoID == sortedVideos.last?.videoID {
-                            loadMore()
-                        }
+                }
+                .onAppear {
+                    if video.videoID == sortedVideos.last?.videoID {
+                        loadMore()
                     }
+                }
             }
 
             if isLoadingMore {
@@ -246,10 +252,12 @@ struct VideoListView: View {
         .navigationTitle(channel.displayName)
     }
 
+    #if os(macOS)
     private func openInBrowser(_ video: Video) {
         let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
         NSWorkspace.shared.open(url)
     }
+    #endif
 
     private func loadMore() {
         guard !isLoadingMore, channel.hasMoreVideos else { return }
@@ -337,6 +345,7 @@ struct PlayerView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
+            #if os(macOS)
             HStack {
                 Button {
                     onBack()
@@ -366,7 +375,15 @@ struct PlayerView: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
             .background(.bar)
+            #endif
         }
+        #if os(tvOS)
+        .onExitCommand { onBack() }
+        .onPlayPauseCommand {
+            // Toggle play/pause via JS — no coordinator reference needed,
+            // WKWebView is the first responder and handles it
+        }
+        #endif
     }
 }
 
