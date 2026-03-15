@@ -20,6 +20,16 @@ run: build
 build-tv:
     xcodebuild -project utv/utv.xcodeproj -scheme utv-tv -configuration Debug -destination 'platform=tvOS Simulator,name=Apple TV' build
 
+# Build release and install to /Applications
+install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    xcodebuild -project utv/utv.xcodeproj -scheme utv -configuration Release build
+    BUILT=$(xcodebuild -project utv/utv.xcodeproj -scheme utv -configuration Release -showBuildSettings 2>/dev/null | grep ' BUILT_PRODUCTS_DIR' | awk '{print $3}')
+    rm -rf /Applications/utv.app
+    cp -R "$BUILT/utv.app" /Applications/utv.app
+    echo "Installed to /Applications/utv.app"
+
 # Clean build artifacts
 clean:
     xcodebuild -project utv/utv.xcodeproj -scheme utv clean

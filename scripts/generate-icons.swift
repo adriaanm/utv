@@ -96,12 +96,21 @@ func writeJSON(_ json: String, to path: String) {
 print("Generating macOS icon...")
 let macDir = "\(base)/Assets.xcassets/AppIcon.appiconset"
 mkdir(macDir)
-generateFullIcon(width: 512, height: 512, path: "\(macDir)/icon_512.png")
-generateFullIcon(width: 1024, height: 1024, path: "\(macDir)/icon_1024.png")
+for size in [16, 32, 64, 128, 256, 512, 1024] {
+    generateFullIcon(width: size, height: size, path: "\(macDir)/icon_\(size).png")
+}
 writeJSON("""
 {
   "images": [
-    { "filename": "icon_512.png", "idiom": "mac", "scale": "1x", "size": "512x512" },
+    { "filename": "icon_16.png",   "idiom": "mac", "scale": "1x", "size": "16x16" },
+    { "filename": "icon_32.png",   "idiom": "mac", "scale": "2x", "size": "16x16" },
+    { "filename": "icon_32.png",   "idiom": "mac", "scale": "1x", "size": "32x32" },
+    { "filename": "icon_64.png",   "idiom": "mac", "scale": "2x", "size": "32x32" },
+    { "filename": "icon_128.png",  "idiom": "mac", "scale": "1x", "size": "128x128" },
+    { "filename": "icon_256.png",  "idiom": "mac", "scale": "2x", "size": "128x128" },
+    { "filename": "icon_256.png",  "idiom": "mac", "scale": "1x", "size": "256x256" },
+    { "filename": "icon_512.png",  "idiom": "mac", "scale": "2x", "size": "256x256" },
+    { "filename": "icon_512.png",  "idiom": "mac", "scale": "1x", "size": "512x512" },
     { "filename": "icon_1024.png", "idiom": "mac", "scale": "2x", "size": "512x512" }
   ],
   "info": { "author": "xcode", "version": 1 }

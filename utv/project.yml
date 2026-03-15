@@ -22,6 +22,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_NSMainStoryboardFile: ""
         CODE_SIGN_ENTITLEMENTS: utv/utv.entitlements
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
       configs:
         debug:
           CODE_SIGN_IDENTITY: "-"
