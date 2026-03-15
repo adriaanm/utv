@@ -198,6 +198,14 @@ struct WebPlayerView: NSViewRepresentable {
             }
             .html5-video-container { width: 100% !important; height: 100% !important; }
             video.html5-main-video { width: 100% !important; height: 100% !important; object-fit: contain !important; }
+
+            /* Native fullscreen via HTML5 Fullscreen API */
+            #movie_player:fullscreen { width: 100% !important; height: 100% !important; }
+            #movie_player:fullscreen .html5-video-container { width: 100% !important; height: 100% !important; }
+            #movie_player:fullscreen video.html5-main-video { width: 100% !important; height: 100% !important; object-fit: contain !important; }
+            #movie_player:-webkit-full-screen { width: 100% !important; height: 100% !important; }
+            #movie_player:-webkit-full-screen .html5-video-container { width: 100% !important; height: 100% !important; }
+            #movie_player:-webkit-full-screen video.html5-main-video { width: 100% !important; height: 100% !important; object-fit: contain !important; }
             """
 
             let js = """
