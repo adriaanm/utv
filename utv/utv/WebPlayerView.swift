@@ -120,23 +120,28 @@ struct WebPlayerView: NSViewRepresentable {
         // MARK: - JS Injection
 
         private func seekTo(_ seconds: Double, in webView: WKWebView) {
-            // Persistent seek: retries until the position sticks.
-            // YouTube's player init can reset currentTime even after a successful seek.
+            // Seek to target, retrying only if YouTube resets position back to 0.
+            // Stop retrying once playback has progressed past the target.
             let js = """
             (function() {
                 const target = \(seconds);
+                let settled = false;
                 let attempts = 0;
                 function trySeek() {
+                    if (settled || attempts >= 20) return;
+                    attempts++;
                     const v = document.querySelector('video');
                     if (!v || v.readyState < 1) {
-                        if (attempts < 30) { attempts++; setTimeout(trySeek, 500); }
+                        setTimeout(trySeek, 500);
                         return;
                     }
-                    if (Math.abs(v.currentTime - target) > 3) {
-                        v.currentTime = target;
+                    if (v.currentTime >= target - 2) {
+                        // Position is at or past target — playback is progressing normally
+                        settled = true;
+                        return;
                     }
-                    // Keep checking — YouTube may reset position during init
-                    if (attempts < 20) { attempts++; setTimeout(trySeek, 1000); }
+                    v.currentTime = target;
+                    setTimeout(trySeek, 1000);
                 }
                 trySeek();
             })();
