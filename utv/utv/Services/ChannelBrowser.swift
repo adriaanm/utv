@@ -18,10 +18,16 @@ struct ChannelBrowser {
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
             forHTTPHeaderField: "User-Agent"
         )
+        await ConsentManager.shared.applyToRequest(&request)
 
         let (data, _) = try await URLSession.shared.data(for: request)
         guard let html = String(data: data, encoding: .utf8) else {
             throw ChannelFeed.FeedError.parseError("Could not decode page")
+        }
+
+        // Detect consent wall
+        if html.contains("consent.youtube.com") || html.contains("consent.google.com") {
+            throw ChannelFeed.FeedError.consentRequired
         }
 
         // Extract ytInitialData JSON from the page

@@ -18,6 +18,7 @@ struct ChannelFeed {
         case noVideoFound
         case networkError(Error)
         case parseError(String)
+        case consentRequired
 
         var errorDescription: String? {
             switch self {
@@ -25,6 +26,7 @@ struct ChannelFeed {
             case .noVideoFound: return "No video found in feed"
             case .networkError(let e): return "Network error: \(e.localizedDescription)"
             case .parseError(let msg): return "Parse error: \(msg)"
+            case .consentRequired: return "YouTube consent required — retrying"
             }
         }
     }
@@ -55,11 +57,15 @@ struct ChannelFeed {
 
         var request = URLRequest(url: url)
         request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
-        // Set consent cookie to bypass GDPR dialog that hides channel metadata
-        request.setValue("SOCS=CAISNQgDEitib3FfaWRlbnRpdHlmcm9udGVuZHVpc2VydmVyXzIwMjMwODI5LjA3X3AxGgJlbiACGgYIgJnPpwY", forHTTPHeaderField: "Cookie")
+        await ConsentManager.shared.applyToRequest(&request)
         let (data, _) = try await URLSession.shared.data(for: request)
         guard let html = String(data: data, encoding: .utf8) else {
             throw FeedError.parseError("Could not decode page")
+        }
+
+        // Detect consent wall redirect
+        if html.contains("consent.youtube.com") || html.contains("consent.google.com") {
+            throw FeedError.consentRequired
         }
 
         // Look for channel ID in meta tags or canonical URL
