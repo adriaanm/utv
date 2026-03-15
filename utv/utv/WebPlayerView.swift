@@ -10,13 +10,13 @@ struct WebPlayerView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
-        config.preferences.isElementFullscreenEnabled = true
         config.mediaTypesRequiringUserActionForPlayback = []
 
         AdBlocker.configure(config)
 
-        // Message handler for position tracking
+        // Message handlers
         config.userContentController.add(context.coordinator, name: "utvPosition")
+        config.userContentController.add(context.coordinator, name: "utvFullscreen")
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
@@ -79,6 +79,13 @@ struct WebPlayerView: NSViewRepresentable {
 
         func userContentController(_ userContentController: WKUserContentController,
                                    didReceive message: WKScriptMessage) {
+            if message.name == "utvFullscreen" {
+                if let window = webView?.window {
+                    window.toggleFullScreen(nil)
+                }
+                return
+            }
+
             guard message.name == "utvPosition",
                   let body = message.body as? [String: Double],
                   let pos = body["currentTime"],
@@ -199,13 +206,6 @@ struct WebPlayerView: NSViewRepresentable {
             .html5-video-container { width: 100% !important; height: 100% !important; }
             video.html5-main-video { width: 100% !important; height: 100% !important; object-fit: contain !important; }
 
-            /* Native fullscreen via HTML5 Fullscreen API */
-            #movie_player:fullscreen { width: 100% !important; height: 100% !important; }
-            #movie_player:fullscreen .html5-video-container { width: 100% !important; height: 100% !important; }
-            #movie_player:fullscreen video.html5-main-video { width: 100% !important; height: 100% !important; object-fit: contain !important; }
-            #movie_player:-webkit-full-screen { width: 100% !important; height: 100% !important; }
-            #movie_player:-webkit-full-screen .html5-video-container { width: 100% !important; height: 100% !important; }
-            #movie_player:-webkit-full-screen video.html5-main-video { width: 100% !important; height: 100% !important; object-fit: contain !important; }
             """
 
             let js = """
@@ -221,6 +221,24 @@ struct WebPlayerView: NSViewRepresentable {
                 const player = document.getElementById('movie_player');
                 if (player && player.setInternalSize) {
                     player.setInternalSize();
+                }
+
+                // Intercept YouTube's fullscreen button → toggle macOS window fullscreen
+                if (!window._utvFsHooked) {
+                    window._utvFsHooked = true;
+                    // Override requestFullscreen so YouTube's click triggers native window fullscreen
+                    Element.prototype.requestFullscreen = function() {
+                        window.webkit.messageHandlers.utvFullscreen.postMessage('toggle');
+                        return Promise.resolve();
+                    };
+                    Element.prototype.webkitRequestFullscreen = Element.prototype.requestFullscreen;
+                    Element.prototype.webkitRequestFullScreen = Element.prototype.requestFullscreen;
+                    // Also override exitFullscreen
+                    Document.prototype.exitFullscreen = function() {
+                        window.webkit.messageHandlers.utvFullscreen.postMessage('toggle');
+                        return Promise.resolve();
+                    };
+                    Document.prototype.webkitExitFullscreen = Document.prototype.exitFullscreen;
                 }
             })();
             """
