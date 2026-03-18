@@ -26,9 +26,6 @@ struct ContentView: View {
         }
         .task {
             await refreshAll()
-            if selectedChannel == nil, let first = channels.first {
-                selectedChannel = first
-            }
             // Refresh every 30 minutes while running
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30 * 60))
@@ -107,6 +104,16 @@ struct ContentView: View {
                 }
             }
 
+            Section {
+                Button {
+                    selectedChannel = nil
+                } label: {
+                    Label("Home", systemImage: "house")
+                }
+                .buttonStyle(.plain)
+                .fontWeight(selectedChannel == nil ? .semibold : .regular)
+            }
+
             Section("Channels") {
                 ForEach(channels) { channel in
                     NavigationLink(value: channel) {
@@ -152,12 +159,10 @@ struct ContentView: View {
             VideoListView(channel: selectedChannel) { video in
                 play(video)
             }
-        } else {
-            ContentUnavailableView(
-                "Select a Channel",
-                systemImage: "tv",
-                description: Text("Add a channel with @handle to get started")
-            )
+        } else if selectedChannel == nil {
+            HomeView { video in
+                play(video)
+            }
         }
     }
 
@@ -386,6 +391,109 @@ struct VideoRow: View {
                     .fill(.blue)
                     .frame(width: 8, height: 8)
             }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Home View
+
+struct HomeView: View {
+    @Query(
+        filter: #Predicate<Video> { !$0.isShort && !$0.watched },
+        sort: \Video.publishedAt,
+        order: .reverse
+    ) private var unwatchedVideos: [Video]
+
+    let onPlay: (Video) -> Void
+
+    var body: some View {
+        Group {
+            if unwatchedVideos.isEmpty {
+                ContentUnavailableView(
+                    "No Unwatched Videos",
+                    systemImage: "tv",
+                    description: Text("Add a channel with @handle to get started")
+                )
+            } else {
+                List {
+                    ForEach(unwatchedVideos) { video in
+                        Button { onPlay(video) } label: {
+                            HomeVideoRow(video: video)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Open in Browser") {
+                                let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
+                                #if os(macOS)
+                                NSWorkspace.shared.open(url)
+                                #else
+                                UIApplication.shared.open(url)
+                                #endif
+                            }
+                            if video.lastPosition > 0 {
+                                Button("Resume at \(formatTime(video.lastPosition))") {
+                                    onPlay(video)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Home")
+    }
+}
+
+struct HomeVideoRow: View {
+    let video: Video
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if let urlString = video.thumbnailURL, let url = URL(string: urlString) {
+                AsyncImage(url: url) { image in
+                    image.resizable().aspectRatio(16/9, contentMode: .fit)
+                } placeholder: {
+                    Rectangle().fill(.quaternary).aspectRatio(16/9, contentMode: .fit)
+                }
+                .frame(width: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(video.title)
+                    .fontWeight(.semibold)
+                    .lineLimit(2)
+
+                HStack(spacing: 8) {
+                    if let channel = video.channel {
+                        Text(channel.handle)
+                            .foregroundStyle(.blue)
+                    }
+                    Text(video.publishedAt, style: .relative)
+                    if video.lastPosition > 0 && video.duration > 0 {
+                        Text("·")
+                        Text("\(formatTime(video.lastPosition)) / \(formatTime(video.duration))")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                if video.lastPosition > 0 && video.duration > 0 {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Rectangle().fill(.quaternary)
+                            Rectangle()
+                                .fill(.blue)
+                                .frame(width: geo.size.width * min(video.lastPosition / video.duration, 1.0))
+                        }
+                    }
+                    .frame(height: 3)
+                    .clipShape(Capsule())
+                }
+            }
+
+            Spacer()
         }
         .padding(.vertical, 4)
     }
