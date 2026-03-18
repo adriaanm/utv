@@ -51,9 +51,14 @@ struct ContentView: View {
                     VStack(alignment: .leading) {
                         Text("YouTube Consent")
                             .font(.headline)
-                        Text("Click on a video to trigger the cookie banner, then accept cookies to use the app.")
+                        Text("Click on a video to trigger the cookie banner, then accept cookies. The dialog closes automatically.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                        if let warning = consentManager.dismissWarning {
+                            Text(warning)
+                                .font(.subheadline)
+                                .foregroundStyle(.red)
+                        }
                     }
                     Spacer()
                     Button("Done") {

@@ -20,14 +20,15 @@ struct ChannelBrowser {
         )
         await ConsentManager.shared.applyToRequest(&request)
 
-        let (data, _) = try await URLSession.shared.data(for: request)
-        guard let html = String(data: data, encoding: .utf8) else {
-            throw ChannelFeed.FeedError.parseError("Could not decode page")
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        // Detect consent wall: YouTube redirects to consent.youtube.com
+        if let finalURL = response.url, ChannelFeed.isConsentURL(finalURL) {
+            throw ChannelFeed.FeedError.consentRequired
         }
 
-        // Detect consent wall
-        if html.contains("consent.youtube.com") || html.contains("consent.google.com") {
-            throw ChannelFeed.FeedError.consentRequired
+        guard let html = String(data: data, encoding: .utf8) else {
+            throw ChannelFeed.FeedError.parseError("Could not decode page")
         }
 
         // Extract ytInitialData JSON from the page

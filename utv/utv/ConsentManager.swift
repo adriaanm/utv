@@ -25,7 +25,20 @@ final class ConsentManager {
     private static let cookieDomain = ".youtube.com"
 
     /// Set to a non-nil value to present the consent sheet.
-    var consentRequest: ConsentRequest?
+    /// Automatically starts/stops cookie observation.
+    var consentRequest: ConsentRequest? {
+        didSet {
+            if consentRequest != nil {
+                dismissWarning = nil
+                startObservingCookies()
+            } else {
+                stopObservingCookies()
+            }
+        }
+    }
+
+    /// Warning shown when the user tries to dismiss without the cookie being set.
+    var dismissWarning: String?
 
     var socsCookieValue: String? {
         get { UserDefaults.standard.string(forKey: Self.defaultsKey) }
@@ -39,6 +52,8 @@ final class ConsentManager {
     }
 
     var needsConsent: Bool { socsCookieValue == nil }
+
+    private var cookieObserver: SOCSCookieObserver?
 
     private init() {}
 
@@ -67,15 +82,17 @@ final class ConsentManager {
         }
     }
 
-    /// Extract the SOCS cookie from the WKWebView cookie store, persist it,
-    /// and dismiss the sheet. Called when the user taps "Done".
+    /// Try to dismiss the consent sheet. If the SOCS cookie hasn't been set yet,
+    /// show a warning instead.
     func finishConsent() async {
         let store = WKWebsiteDataStore.default().httpCookieStore
         let cookies = await store.allCookies()
         if let socs = cookies.first(where: { $0.name == "SOCS" && $0.domain.contains("youtube") }) {
             socsCookieValue = socs.value
+            consentRequest = nil
+        } else {
+            dismissWarning = "Cookie consent not yet accepted. YouTube blocks video feeds without it — browse around and accept the cookie banner before closing."
         }
-        consentRequest = nil
     }
 
     /// Clear stored consent and all WKWebView data (for testing / re-consent).
@@ -85,6 +102,28 @@ final class ConsentManager {
         let records = await store.dataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes())
         for record in records {
             await store.removeData(ofTypes: record.dataTypes, for: [record])
+        }
+    }
+
+    // MARK: - Cookie observation
+
+    private func startObservingCookies() {
+        let observer = SOCSCookieObserver { [weak self] value in
+            Task { @MainActor in
+                guard let self, self.consentRequest != nil else { return }
+                self.socsCookieValue = value
+                self.stopObservingCookies()
+                self.consentRequest = nil
+            }
+        }
+        cookieObserver = observer
+        WKWebsiteDataStore.default().httpCookieStore.add(observer)
+    }
+
+    private func stopObservingCookies() {
+        if let observer = cookieObserver {
+            WKWebsiteDataStore.default().httpCookieStore.remove(observer)
+            cookieObserver = nil
         }
     }
 
@@ -100,6 +139,26 @@ final class ConsentManager {
             .expires: Date.distantFuture,
         ]) else { return }
         await WKWebsiteDataStore.default().httpCookieStore.setCookie(cookie)
+    }
+}
+
+// MARK: - WKHTTPCookieStore observer
+
+/// Watches the WKWebView cookie store for the SOCS cookie being set.
+private class SOCSCookieObserver: NSObject, WKHTTPCookieStoreObserver {
+    private let onFound: (String) -> Void
+
+    init(onFound: @escaping (String) -> Void) {
+        self.onFound = onFound
+    }
+
+    func cookiesDidChange(in cookieStore: WKHTTPCookieStore) {
+        Task {
+            let cookies = await cookieStore.allCookies()
+            if let socs = cookies.first(where: { $0.name == "SOCS" && $0.domain.contains("youtube") }) {
+                onFound(socs.value)
+            }
+        }
     }
 }
 

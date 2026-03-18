@@ -59,14 +59,15 @@ struct ChannelFeed {
         var request = URLRequest(url: url)
         request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
         await ConsentManager.shared.applyToRequest(&request)
-        let (data, _) = try await URLSession.shared.data(for: request)
-        guard let html = String(data: data, encoding: .utf8) else {
-            throw FeedError.parseError("Could not decode page")
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        // Detect consent wall: YouTube redirects to consent.youtube.com
+        if let finalURL = response.url, Self.isConsentURL(finalURL) {
+            throw FeedError.consentRequired
         }
 
-        // Detect consent wall redirect
-        if html.contains("consent.youtube.com") || html.contains("consent.google.com") {
-            throw FeedError.consentRequired
+        guard let html = String(data: data, encoding: .utf8) else {
+            throw FeedError.parseError("Could not decode page")
         }
 
         // Look for channel ID in meta tags or canonical URL
@@ -86,6 +87,12 @@ struct ChannelFeed {
         }
 
         throw FeedError.parseError("Could not find channel ID on page")
+    }
+
+    /// Check whether a URL is a YouTube/Google consent wall redirect.
+    static func isConsentURL(_ url: URL) -> Bool {
+        guard let host = url.host?.lowercased() else { return false }
+        return host == "consent.youtube.com" || host == "consent.google.com"
     }
 
     /// Fetch all videos from a channel's RSS feed.
