@@ -510,6 +510,10 @@ struct PlayerView: View {
     let video: Video
     let onBack: () -> Void
 
+    #if os(macOS)
+    @State private var isFullScreen = false
+    #endif
+
     var body: some View {
         VStack(spacing: 0) {
             WebPlayerView(
@@ -522,45 +526,22 @@ struct PlayerView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            #if os(macOS) || os(iOS)
-            HStack {
-                Button {
-                    onBack()
-                } label: {
-                    Label("Back", systemImage: "chevron.left")
-                }
-                #if os(macOS)
-                .keyboardShortcut(.escape, modifiers: [])
-                #endif
-
-                Text(video.title)
-                    .lineLimit(1)
-                    .font(.headline)
-
-                Spacer()
-
-                Button {
-                    let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
-                    #if os(macOS)
-                    NSWorkspace.shared.open(url)
-                    #else
-                    UIApplication.shared.open(url)
-                    #endif
-                } label: {
-                    Label("Open in Browser", systemImage: "safari")
-                }
-                .buttonStyle(.borderless)
-
-                Text(video.publishedAt, style: .date)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            #if os(macOS)
+            if !isFullScreen {
+                playerBar
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-            .background(.bar)
+            #elseif os(iOS)
+            playerBar
             #endif
         }
-        #if os(tvOS)
+        #if os(macOS)
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in
+            isFullScreen = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { _ in
+            isFullScreen = false
+        }
+        #elseif os(tvOS)
         .onExitCommand { onBack() }
         .onPlayPauseCommand {
             // Toggle play/pause via JS — no coordinator reference needed,
@@ -568,6 +549,46 @@ struct PlayerView: View {
         }
         #endif
     }
+
+    #if os(macOS) || os(iOS)
+    private var playerBar: some View {
+        HStack {
+            Button {
+                onBack()
+            } label: {
+                Label("Back", systemImage: "chevron.left")
+            }
+            #if os(macOS)
+            .keyboardShortcut(.escape, modifiers: [])
+            #endif
+
+            Text(video.title)
+                .lineLimit(1)
+                .font(.headline)
+
+            Spacer()
+
+            Button {
+                let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
+                #if os(macOS)
+                NSWorkspace.shared.open(url)
+                #else
+                UIApplication.shared.open(url)
+                #endif
+            } label: {
+                Label("Open in Browser", systemImage: "safari")
+            }
+            .buttonStyle(.borderless)
+
+            Text(video.publishedAt, style: .date)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(.bar)
+    }
+    #endif
 }
 
 // MARK: - Helpers
