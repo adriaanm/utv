@@ -13,6 +13,9 @@ struct ContentView: View {
     @State private var isAddingChannel = false
     @State private var isRefreshing = false
     @State private var errorMessage: String?
+    #if os(macOS)
+    @State private var isFullScreen = false
+    #endif
 
     private var feedService: FeedService {
         FeedService(modelContext: modelContext)
@@ -38,6 +41,15 @@ struct ContentView: View {
                 columnVisibility = .automatic
             }
         }
+        #if os(macOS)
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in
+            isFullScreen = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { _ in
+            isFullScreen = false
+        }
+        .toolbar(playingVideo != nil && isFullScreen ? .hidden : .automatic)
+        #endif
         #if canImport(WebKit)
         .task {
             // Re-inject existing cookie into WKWebView store on launch
@@ -157,9 +169,15 @@ struct ContentView: View {
     @ViewBuilder
     private var detail: some View {
         if let playingVideo {
+            #if os(macOS)
+            PlayerView(video: playingVideo, isFullScreen: isFullScreen) {
+                stopPlaying()
+            }
+            #else
             PlayerView(video: playingVideo) {
                 stopPlaying()
             }
+            #endif
         } else if let selectedChannel {
             VideoListView(channel: selectedChannel) { video in
                 play(video)
@@ -508,11 +526,8 @@ struct HomeVideoRow: View {
 
 struct PlayerView: View {
     let video: Video
+    var isFullScreen: Bool = false
     let onBack: () -> Void
-
-    #if os(macOS)
-    @State private var isFullScreen = false
-    #endif
 
     var body: some View {
         VStack(spacing: 0) {
@@ -534,14 +549,7 @@ struct PlayerView: View {
             playerBar
             #endif
         }
-        #if os(macOS)
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in
-            isFullScreen = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { _ in
-            isFullScreen = false
-        }
-        #elseif os(tvOS)
+        #if os(tvOS)
         .onExitCommand { onBack() }
         .onPlayPauseCommand {
             // Toggle play/pause via JS — no coordinator reference needed,
