@@ -7,6 +7,7 @@ struct ContentView: View {
 
     @State private var consentManager = ConsentManager.shared
     @State private var selectedChannel: Channel?
+    @State private var showingHistory = false
     @State private var playingVideo: Video?
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var handleInput = ""
@@ -36,9 +37,12 @@ struct ContentView: View {
             }
         }
         .onChange(of: selectedChannel) { _, newValue in
-            if newValue != nil && playingVideo != nil {
-                playingVideo = nil
-                columnVisibility = .automatic
+            if newValue != nil {
+                showingHistory = false
+                if playingVideo != nil {
+                    playingVideo = nil
+                    columnVisibility = .automatic
+                }
             }
         }
         #if os(macOS)
@@ -124,11 +128,21 @@ struct ContentView: View {
             Section {
                 Button {
                     selectedChannel = nil
+                    showingHistory = false
                 } label: {
                     Label("Home", systemImage: "house")
                 }
                 .buttonStyle(.plain)
-                .fontWeight(selectedChannel == nil ? .semibold : .regular)
+                .fontWeight(selectedChannel == nil && !showingHistory ? .semibold : .regular)
+
+                Button {
+                    selectedChannel = nil
+                    showingHistory = true
+                } label: {
+                    Label("History", systemImage: "clock.arrow.circlepath")
+                }
+                .buttonStyle(.plain)
+                .fontWeight(showingHistory ? .semibold : .regular)
             }
 
             Section("Channels") {
@@ -182,7 +196,11 @@ struct ContentView: View {
             VideoListView(channel: selectedChannel) { video in
                 play(video)
             }
-        } else if selectedChannel == nil {
+        } else if showingHistory {
+            HistoryView { video in
+                play(video)
+            }
+        } else {
             HomeView { video in
                 play(video)
             }
@@ -416,6 +434,55 @@ struct VideoRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+// MARK: - History View
+
+struct HistoryView: View {
+    @Query(
+        filter: #Predicate<Video> { $0.watched },
+        sort: \Video.watchedAt,
+        order: .reverse
+    ) private var watchedVideos: [Video]
+
+    let onPlay: (Video) -> Void
+
+    var body: some View {
+        Group {
+            if watchedVideos.isEmpty {
+                ContentUnavailableView(
+                    "No Watch History",
+                    systemImage: "clock.arrow.circlepath",
+                    description: Text("Videos you watch will appear here")
+                )
+            } else {
+                List {
+                    ForEach(watchedVideos) { video in
+                        Button { onPlay(video) } label: {
+                            HomeVideoRow(video: video)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Open in Browser") {
+                                let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
+                                #if os(macOS)
+                                NSWorkspace.shared.open(url)
+                                #else
+                                UIApplication.shared.open(url)
+                                #endif
+                            }
+                            if video.lastPosition > 0 {
+                                Button("Resume at \(formatTime(video.lastPosition))") {
+                                    onPlay(video)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("History")
     }
 }
 
