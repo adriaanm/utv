@@ -50,11 +50,22 @@ docs/                   Documentation and guides
 
 ## Build
 
-Builds with SwiftPM (`swift build`). Requires the Xcode toolchain — SwiftData macros are only available in the Xcode-bundled Swift:
+Builds with SwiftPM (`swift build`). Requires the Xcode toolchain:
 
 ```
 sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 ```
+
+### Xcode toolchain dependencies
+
+We use `swift build` (not `xcodebuild`), but two things still require Xcode.app to be installed:
+
+| Dependency | Used by | Why Xcode | Could be replaced when... |
+|---|---|---|---|
+| **SwiftData macros** (`SwiftDataMacros.PersistentModelMacro`) | `swift build` — expands `@Model`, `@Attribute`, `@Relationship` | The macro plugin binary ships only inside Xcode.app, not in Command Line Tools | SwiftPM gains the ability to build/distribute macro plugins independently, or Apple ships SwiftData macros in the CLI toolchain |
+| **`actool`** (Asset Catalog compiler) | `scripts/bundle-app.sh` — compiles `Assets.xcassets` into `AppIcon.icns` + `Assets.car` | `actool` is an Xcode developer tool, not available standalone | SwiftPM learns to compile asset catalogs natively ([SE-0loading](https://forums.swift.org/t/asset-catalog-support-in-swiftpm/)), or an open-source `actool` alternative emerges |
+
+Everything else — compilation, linking, code signing, app bundle assembly — works with just the Swift toolchain and standard macOS tools (`codesign`).
 
 ## Just recipes
 
