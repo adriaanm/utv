@@ -2,13 +2,13 @@
 
 ## Architecture
 
-Ad blocking uses three layers, all configured in `AdBlocker.swift`:
+Ad blocking uses three layers, all configured in `Sources/AdBlocker.swift`:
 
 | Layer | File | What it does | How to update |
 |-------|------|-------------|---------------|
-| Scriptlet bundle | `utv/utv/Resources/ubo-scriptlets.js` | Intercepts `fetch`/`XHR`/`JSON.parse` to strip ad payloads from YouTube API responses | `just sync` |
-| Content rules | `utv/utv/Resources/content-rules.json` | WebKit content blocker — blocks network requests to ad domains | Edit manually |
-| CSS hiding | `AdBlocker.swift` | Hides ad-related DOM elements | Edit manually |
+| Scriptlet bundle | `Sources/Resources/ubo-scriptlets.js` | Intercepts `fetch`/`XHR`/`JSON.parse` to strip ad payloads from YouTube API responses | `just sync` |
+| Content rules | `Sources/Resources/content-rules.json` | WebKit content blocker — blocks network requests to ad domains | Edit manually |
+| CSS hiding | `Sources/AdBlocker.swift` | Hides ad-related DOM elements | Edit manually |
 
 The scriptlet bundle does the heavy lifting. It's a pre-compiled IIFE from the uBOL-home repo that activates `json-prune`, `prevent-fetch`, `prevent-xhr` etc. specifically for youtube.com. The content rules and CSS are a safety net for anything the scriptlets miss.
 
@@ -36,13 +36,13 @@ We track upstream uBO repos as git submodules for reference:
    just diff-filters   # shows YouTube-relevant filter changes in uAssets
    ```
    Look for new domains or URL patterns → add them to `content-rules.json`.
-   Look for new CSS selectors → add them to the CSS hiding section in `AdBlocker.swift`.
+   Look for new CSS selectors → add them to the CSS hiding section in `Sources/AdBlocker.swift`.
 
 3. **If a specific ad format is new**, use Safari Web Inspector on the running app:
    - Develop menu → utv → Web Inspector
    - Network tab: find ad requests that aren't blocked
    - Elements tab: find ad DOM elements that aren't hidden
-   - Add rules to `content-rules.json` or CSS in `AdBlocker.swift`
+   - Add rules to `content-rules.json` or CSS in `Sources/AdBlocker.swift`
 
 ## content-rules.json format
 

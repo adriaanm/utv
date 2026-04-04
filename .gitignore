@@ -1,11 +1,8 @@
 # Derived output from scripts/sync-ubo.sh
 AdsFilters/
 
-# Generated Xcode project (regenerate with `just generate`)
-utv/utv.xcodeproj/
-
 # Copied by sync script (regenerate with `just sync`)
-utv/utv/Resources/ubo-scriptlets.js
+Sources/Resources/ubo-scriptlets.js
 
 # Local environment (contains signing team ID etc.)
 .envrc

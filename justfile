@@ -58,10 +58,10 @@ adblock-status:
     #!/usr/bin/env bash
     set -euo pipefail
     echo "==> Scriptlet bundle:"
-    ls -lh utv/utv/Resources/ubo-scriptlets.js 2>/dev/null || echo "  NOT FOUND — run 'just sync'"
+    ls -lh Sources/Resources/ubo-scriptlets.js 2>/dev/null || echo "  NOT FOUND — run 'just sync'"
     echo ""
     echo "==> Content rules:"
-    jq length utv/utv/Resources/content-rules.json 2>/dev/null && echo "  rules in content-rules.json" || echo "  NOT FOUND"
+    jq length Sources/Resources/content-rules.json 2>/dev/null && echo "  rules in content-rules.json" || echo "  NOT FOUND"
     echo ""
     echo "==> Submodule versions:"
     git submodule status --cached | sed 's/^/  /'

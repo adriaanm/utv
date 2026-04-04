@@ -24,7 +24,7 @@ Three layers, maintained independently. When ads start appearing:
 
 1. `just sync` — pulls latest uBO scriptlet bundle from upstream (fixes most breakage)
 2. Edit `content-rules.json` — add new ad domains/URL patterns if needed
-3. Edit CSS hiding in `AdBlocker.swift` — add new ad element selectors if needed
+3. Edit CSS hiding in `Sources/AdBlocker.swift` — add new ad element selectors if needed
 
 Use `just diff-filters` to see what changed upstream in uAssets. Use `just adblock-status` to check current bundle version. Full details in [docs/ubo-tracking.md](docs/ubo-tracking.md).
 
@@ -37,7 +37,7 @@ Use `just diff-filters` to see what changed upstream in uAssets. Use `just adblo
 
 ```
 Package.swift           SwiftPM package definition
-utv/utv/                SwiftUI app source
+Sources/                SwiftUI app source
   Models/               SwiftData models (Channel, Video)
   Services/             FeedService (RSS → SwiftData)
   Resources/            content-rules.json, ubo-scriptlets.js

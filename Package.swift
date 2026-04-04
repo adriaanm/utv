@@ -10,7 +10,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "utv",
-            path: "utv/utv",
+            path: "Sources",
             exclude: [
                 "utv.entitlements",
             ],

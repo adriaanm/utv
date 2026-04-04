@@ -84,7 +84,7 @@ func generateTopShelf(width: Int, height: Int, path: String) {
 }
 
 // --- Setup ---
-let base = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "utv/utv"
+let base = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "Sources"
 let fm = FileManager.default
 func mkdir(_ p: String) { try? fm.createDirectory(atPath: p, withIntermediateDirectories: true) }
 

@@ -63,7 +63,7 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 PLIST
 
 codesign --force --sign - \
-    --entitlements "$REPO_ROOT/utv/utv/utv.entitlements" \
+    --entitlements "$REPO_ROOT/Sources/utv.entitlements" \
     "$APP_DIR"
 
 echo "Bundled: $APP_DIR"

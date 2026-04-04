@@ -5,7 +5,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT_DIR="$REPO_ROOT/AdsFilters"
 
 FORCE="${1:-}"
-APP_RESOURCES="$REPO_ROOT/utv/utv/Resources"
+APP_RESOURCES="$REPO_ROOT/Sources/Resources"
 SCRIPTLET_TARGET="$APP_RESOURCES/ubo-scriptlets.js"
 
 # Quick path: if not --update and scriptlets already exist, nothing to do
@@ -95,7 +95,7 @@ echo "   Copied $(find "$OUT_DIR/scriptlets" -type f | wc -l | tr -d ' ') script
 
 # --- 4. Copy scriptlet bundle into app Resources ---
 echo "==> Copying uBO scriptlet bundle into utv app Resources..."
-APP_RESOURCES="$REPO_ROOT/utv/utv/Resources"
+APP_RESOURCES="$REPO_ROOT/Sources/Resources"
 mkdir -p "$APP_RESOURCES"
 SCRIPTLET_BUNDLE="$UBOL/scripting/scriptlet/main/ublock-filters.js"
 if [ -f "$SCRIPTLET_BUNDLE" ]; then
