@@ -1,6 +1,4 @@
 import Foundation
-
-#if canImport(WebKit)
 import WebKit
 import SwiftUI
 
@@ -164,19 +162,11 @@ private class SOCSCookieObserver: NSObject, WKHTTPCookieStoreObserver {
 
 // MARK: - Consent Web View
 
-#if os(macOS)
 struct ConsentWebView: NSViewRepresentable {
     var searchQuery: String?
     func makeNSView(context: Context) -> WKWebView { makeConsentWebView() }
     func updateNSView(_ nsView: WKWebView, context: Context) {}
 }
-#else
-struct ConsentWebView: UIViewRepresentable {
-    var searchQuery: String?
-    func makeUIView(context: Context) -> WKWebView { makeConsentWebView() }
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
-}
-#endif
 
 extension ConsentWebView {
     func makeConsentWebView() -> WKWebView {
@@ -190,5 +180,3 @@ extension ConsentWebView {
         return wv
     }
 }
-
-#endif

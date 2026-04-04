@@ -74,7 +74,8 @@ It's a self-contained IIFE that checks `document.location` and activates the rig
 ## Initial setup
 
 ```sh
-git submodule update --init --recursive
-just sync
-just build
+just build    # inits submodules (shallow), syncs scriptlets, builds
+just run      # build + assemble .app bundle + launch
 ```
+
+Submodules are cloned with `--depth 1` (shallow) to keep disk usage low. `just sync` fetches latest upstream; `just build` only initialises if not already done.

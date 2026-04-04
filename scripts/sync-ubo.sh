@@ -4,8 +4,22 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT_DIR="$REPO_ROOT/AdsFilters"
 
-echo "==> Updating submodules to latest upstream..."
-git -C "$REPO_ROOT" submodule update --remote --merge
+FORCE="${1:-}"
+APP_RESOURCES="$REPO_ROOT/utv/utv/Resources"
+SCRIPTLET_TARGET="$APP_RESOURCES/ubo-scriptlets.js"
+
+# Quick path: if not --update and scriptlets already exist, nothing to do
+if [ "$FORCE" != "--update" ] && [ -f "$SCRIPTLET_TARGET" ]; then
+    exit 0
+fi
+
+echo "==> Initialising submodules (shallow)..."
+git -C "$REPO_ROOT" submodule update --init --depth 1
+
+if [ "$FORCE" = "--update" ]; then
+    echo "==> Fetching latest upstream..."
+    git -C "$REPO_ROOT" submodule update --remote --depth 1
+fi
 
 echo "==> Preparing output directory: $OUT_DIR"
 rm -rf "$OUT_DIR"

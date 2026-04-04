@@ -1,9 +1,12 @@
 [submodule "third_party/uAssets"]
 	path = third_party/uAssets
 	url = https://github.com/uBlockOrigin/uAssets.git
+	shallow = true
 [submodule "third_party/uBOL-home"]
 	path = third_party/uBOL-home
 	url = https://github.com/uBlockOrigin/uBOL-home.git
+	shallow = true
 [submodule "third_party/uBlock"]
 	path = third_party/uBlock
 	url = https://github.com/gorhill/uBlock.git
+	shallow = true

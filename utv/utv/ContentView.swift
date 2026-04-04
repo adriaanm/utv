@@ -14,9 +14,7 @@ struct ContentView: View {
     @State private var isAddingChannel = false
     @State private var isRefreshing = false
     @State private var errorMessage: String?
-    #if os(macOS)
     @State private var isFullScreen = false
-    #endif
 
     private var feedService: FeedService {
         FeedService(modelContext: modelContext)
@@ -45,7 +43,6 @@ struct ContentView: View {
                 }
             }
         }
-        #if os(macOS)
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in
             isFullScreen = true
         }
@@ -53,8 +50,6 @@ struct ContentView: View {
             isFullScreen = false
         }
         .toolbar(playingVideo != nil && isFullScreen ? .hidden : .automatic)
-        #endif
-        #if canImport(WebKit)
         .task {
             // Re-inject existing cookie into WKWebView store on launch
             if let value = consentManager.socsCookieValue {
@@ -90,7 +85,6 @@ struct ContentView: View {
             }
             .frame(minWidth: 600, idealWidth: 700, minHeight: 500, idealHeight: 600)
         }
-        #endif
     }
 
     // MARK: - Sidebar
@@ -100,9 +94,7 @@ struct ContentView: View {
             Section {
                 HStack {
                     TextField("@handle", text: $handleInput)
-                        #if os(macOS)
                         .textFieldStyle(.roundedBorder)
-                        #endif
                         .onSubmit { addChannel() }
                     Button {
                         addChannel()
@@ -163,9 +155,7 @@ struct ContentView: View {
                 .onDelete(perform: deleteChannels)
             }
         }
-        #if os(macOS)
         .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
-        #endif
         .toolbar {
             ToolbarItem {
                 Button {
@@ -183,15 +173,9 @@ struct ContentView: View {
     @ViewBuilder
     private var detail: some View {
         if let playingVideo {
-            #if os(macOS)
             PlayerView(video: playingVideo, isFullScreen: isFullScreen) {
                 stopPlaying()
             }
-            #else
-            PlayerView(video: playingVideo) {
-                stopPlaying()
-            }
-            #endif
         } else if let selectedChannel {
             VideoListView(channel: selectedChannel) { video in
                 play(video)
@@ -362,11 +346,7 @@ struct VideoListView: View {
 
     private func openInBrowser(_ video: Video) {
         let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
-        #if os(macOS)
         NSWorkspace.shared.open(url)
-        #else
-        UIApplication.shared.open(url)
-        #endif
     }
 
     private func loadMore() {
@@ -466,11 +446,7 @@ struct HistoryView: View {
                         .contextMenu {
                             Button("Open in Browser") {
                                 let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
-                                #if os(macOS)
-                                NSWorkspace.shared.open(url)
-                                #else
-                                UIApplication.shared.open(url)
-                                #endif
+                                                NSWorkspace.shared.open(url)
                             }
                             if video.lastPosition > 0 {
                                 Button("Resume at \(formatTime(video.lastPosition))") {
@@ -515,11 +491,7 @@ struct HomeView: View {
                         .contextMenu {
                             Button("Open in Browser") {
                                 let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
-                                #if os(macOS)
-                                NSWorkspace.shared.open(url)
-                                #else
-                                UIApplication.shared.open(url)
-                                #endif
+                                                NSWorkspace.shared.open(url)
                             }
                             if video.lastPosition > 0 {
                                 Button("Resume at \(formatTime(video.lastPosition))") {
@@ -608,24 +580,12 @@ struct PlayerView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            #if os(macOS)
             if !isFullScreen {
                 playerBar
             }
-            #elseif os(iOS)
-            playerBar
-            #endif
         }
-        #if os(tvOS)
-        .onExitCommand { onBack() }
-        .onPlayPauseCommand {
-            // Toggle play/pause via JS — no coordinator reference needed,
-            // WKWebView is the first responder and handles it
-        }
-        #endif
     }
 
-    #if os(macOS) || os(iOS)
     private var playerBar: some View {
         HStack {
             Button {
@@ -633,9 +593,7 @@ struct PlayerView: View {
             } label: {
                 Label("Back", systemImage: "chevron.left")
             }
-            #if os(macOS)
             .keyboardShortcut(.escape, modifiers: [])
-            #endif
 
             Text(video.title)
                 .lineLimit(1)
@@ -645,11 +603,7 @@ struct PlayerView: View {
 
             Button {
                 let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
-                #if os(macOS)
                 NSWorkspace.shared.open(url)
-                #else
-                UIApplication.shared.open(url)
-                #endif
             } label: {
                 Label("Open in Browser", systemImage: "safari")
             }
@@ -663,7 +617,6 @@ struct PlayerView: View {
         .padding(.vertical, 8)
         .background(.bar)
     }
-    #endif
 }
 
 // MARK: - Helpers

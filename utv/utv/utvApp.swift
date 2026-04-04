@@ -7,7 +7,6 @@ struct utvApp: App {
         WindowGroup {
             ContentView()
         }
-        #if os(macOS)
         .defaultSize(width: 1280, height: 800)
         .commands {
             CommandGroup(after: .appSettings) {
@@ -19,22 +18,6 @@ struct utvApp: App {
                 }
             }
         }
-        #elseif os(iOS)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Button("Clear Cookies & Re-consent") {
-                        Task { @MainActor in
-                            await ConsentManager.shared.clearAllCookies()
-                            ConsentManager.shared.consentRequest = ConsentRequest(searchQuery: nil)
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-            }
-        }
-        #endif
         .modelContainer(for: [Channel.self, Video.self])
     }
 }

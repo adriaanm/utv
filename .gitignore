@@ -12,6 +12,9 @@ utv/utv/Resources/ubo-scriptlets.js
 
 .DS_Store
 
+# Build output
+.build/
+
 # Xcode
 *.xcuserdata
 DerivedData/

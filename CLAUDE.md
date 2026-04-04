@@ -2,7 +2,7 @@
 
 ## Project
 
-Personal-use macOS YouTube viewer app using WKWebView + content blocking, backed by uBlock Origin filter lists. No login, no YouTube API — all state is local. Will port to tvOS later.
+Personal-use macOS YouTube viewer app using WKWebView + content blocking, backed by uBlock Origin filter lists. No login, no YouTube API — all state is local. macOS-only.
 
 ## Working principles
 
@@ -30,27 +30,38 @@ Use `just diff-filters` to see what changed upstream in uAssets. Use `just adblo
 
 ## Key docs
 
-- [docs/roadmap.md](docs/roadmap.md) — Project roadmap: macOS PoC → usable app → tvOS port
+- [docs/roadmap.md](docs/roadmap.md) — Project roadmap
 - [docs/ubo-tracking.md](docs/ubo-tracking.md) — Ad blocking architecture and update workflow
 
 ## Repo structure
 
 ```
+Package.swift           SwiftPM package definition
 utv/utv/                SwiftUI app source
   Models/               SwiftData models (Channel, Video)
   Services/             FeedService (RSS → SwiftData)
   Resources/            content-rules.json, ubo-scriptlets.js
-third_party/            Git submodules (uAssets, uBOL-home, uBlock)
-scripts/                Automation scripts
+scripts/
   sync-ubo.sh          Update submodules + extract scriptlet bundle
+  bundle-app.sh         Assemble .app bundle from swift build output
+third_party/            Git submodules (uAssets, uBOL-home, uBlock)
 docs/                   Documentation and guides
+```
+
+## Build
+
+Builds with SwiftPM (`swift build`). Requires the Xcode toolchain — SwiftData macros are only available in the Xcode-bundled Swift:
+
+```
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 ```
 
 ## Just recipes
 
+- `just build` — sync submodules + build debug
+- `just run` — build + bundle + launch .app
+- `just install` — release build + install to /Applications
 - `just sync` — update uBO submodules + copy scriptlet bundle
-- `just generate` — regenerate Xcode project from project.yml
-- `just build` — build debug
-- `just run` — build + launch app
+- `just clean` — remove build artifacts
 - `just diff-filters` — show YouTube-relevant upstream filter changes
 - `just adblock-status` — show bundle version, rule count, submodule versions

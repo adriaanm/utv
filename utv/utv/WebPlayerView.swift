@@ -1,9 +1,6 @@
 import SwiftUI
-
-#if canImport(WebKit)
 import WebKit
 
-#if os(macOS)
 struct WebPlayerView: NSViewRepresentable {
     let videoID: String?
     var maximized: Bool = false
@@ -14,27 +11,13 @@ struct WebPlayerView: NSViewRepresentable {
     func updateNSView(_ webView: WKWebView, context: Context) { updateWebView(webView, context: context) }
     func makeCoordinator() -> Coordinator { Coordinator() }
 }
-#else
-struct WebPlayerView: UIViewRepresentable {
-    let videoID: String?
-    var maximized: Bool = false
-    var startAt: Double = 0
-    var onPositionUpdate: ((Double, Double) -> Void)?
-
-    func makeUIView(context: Context) -> WKWebView { makeWebView(context: context) }
-    func updateUIView(_ webView: WKWebView, context: Context) { updateWebView(webView, context: context) }
-    func makeCoordinator() -> Coordinator { Coordinator() }
-}
-#endif
 
 // MARK: - Shared Implementation
 
 extension WebPlayerView {
     func makeWebView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
-        #if os(macOS)
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
-        #endif
         config.mediaTypesRequiringUserActionForPlayback = []
 
         AdBlocker.configure(config)
@@ -117,11 +100,9 @@ extension WebPlayerView {
         func userContentController(_ userContentController: WKUserContentController,
                                    didReceive message: WKScriptMessage) {
             if message.name == "utvFullscreen" {
-                #if os(macOS)
                 if let window = webView?.window {
                     window.toggleFullScreen(nil)
                 }
-                #endif
                 return
             }
 
@@ -275,21 +256,3 @@ extension WebPlayerView {
         }
     }
 }
-
-#else
-// tvOS: WebKit is not available. Placeholder until a native player is implemented.
-struct WebPlayerView: View {
-    let videoID: String?
-    var maximized: Bool = false
-    var startAt: Double = 0
-    var onPositionUpdate: ((Double, Double) -> Void)?
-
-    var body: some View {
-        ContentUnavailableView(
-            "Playback Not Yet Available",
-            systemImage: "tv",
-            description: Text("WebKit is not available on tvOS. A native player will be added in a future update.")
-        )
-    }
-}
-#endif

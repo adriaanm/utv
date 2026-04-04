@@ -1,59 +1,45 @@
-# utv — YouTube viewer with ad blocking (macOS + tvOS)
+# utv — YouTube viewer with ad blocking (macOS)
 
-# Update submodules and copy scriptlet bundle into app Resources
+# Update submodules to latest upstream + copy scriptlet bundle
 sync:
-    ./scripts/sync-ubo.sh
-
-# Generate Xcode project from project.yml
-generate:
-    cd utv && xcodegen generate
+    ./scripts/sync-ubo.sh --update
 
 # Build the app (debug)
-build:
-    xcodebuild -project utv/utv.xcodeproj -scheme utv -configuration Debug build
-
-# Build and run
-run: build
-    open "$(xcodebuild -project utv/utv.xcodeproj -scheme utv -configuration Debug -showBuildSettings 2>/dev/null | grep ' BUILT_PRODUCTS_DIR' | awk '{print $3}')/utv.app"
-
-# Build iOS app (debug)
-build-ios:
-    xcodebuild -project utv/utv.xcodeproj -scheme utv-ios -configuration Debug -destination generic/platform=iOS -allowProvisioningUpdates build
-
-# Build tvOS app (debug, simulator)
-build-tv:
-    xcodebuild -project utv/utv.xcodeproj -scheme utv-tv -configuration Debug -destination 'platform=tvOS Simulator,name=Apple TV' build
-
-# Build release and install to /Applications
-install:
+build: _ensure-resources
     #!/usr/bin/env bash
     set -euo pipefail
-    xcodebuild -project utv/utv.xcodeproj -scheme utv -configuration Release build
-    BUILT=$(xcodebuild -project utv/utv.xcodeproj -scheme utv -configuration Release -showBuildSettings 2>/dev/null | grep ' BUILT_PRODUCTS_DIR' | awk '{print $3}')
+    # SwiftData macros require the Xcode toolchain (not just Command Line Tools)
+    DEV_DIR="$(xcode-select -p 2>/dev/null || true)"
+    if [[ "$DEV_DIR" != */Xcode.app/* ]]; then
+        echo "error: SwiftData macros require the Xcode toolchain. Install Xcode and run:" >&2
+        echo "  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer" >&2
+        exit 1
+    fi
+    swift build
+
+# Build and assemble + launch .app bundle
+run: build
+    ./scripts/bundle-app.sh
+    open .build/utv.app
+
+# Ensure submodules are initialised and scriptlets are in place (no network if already done)
+_ensure-resources:
+    ./scripts/sync-ubo.sh
+
+# Build release and install to /Applications
+install: _ensure-resources
+    #!/usr/bin/env bash
+    set -euo pipefail
+    swift build -c release
+    ./scripts/bundle-app.sh release
     rm -rf /Applications/utv.app
-    cp -R "$BUILT/utv.app" /Applications/utv.app
+    cp -R .build/utv.app /Applications/utv.app
     xattr -cr /Applications/utv.app
     echo "Installed to /Applications/utv.app"
 
-# Build release .app and package as a .tar.gz for sharing
-package:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    xcodebuild -project utv/utv.xcodeproj -scheme utv -configuration Release build
-    BUILT=$(xcodebuild -project utv/utv.xcodeproj -scheme utv -configuration Release -showBuildSettings 2>/dev/null | grep ' BUILT_PRODUCTS_DIR' | awk '{print $3}')
-    STAGING=$(mktemp -d)
-    cp -R "$BUILT/utv.app" "$STAGING/"
-    cp scripts/install-utv.sh "$STAGING/"
-    cd "$STAGING"
-    tar czf utv.tar.gz utv.app install-utv.sh
-    mv utv.tar.gz "{{justfile_directory()}}/"
-    rm -rf "$STAGING"
-    echo "Created utv.tar.gz — transfer to target Mac and run:"
-    echo "  tar xzf utv.tar.gz && ./install-utv.sh"
-
 # Clean build artifacts
 clean:
-    xcodebuild -project utv/utv.xcodeproj -scheme utv clean
+    swift package clean
 
 # Show YouTube-relevant filter changes since last submodule update
 diff-filters:

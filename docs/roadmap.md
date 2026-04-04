@@ -29,7 +29,7 @@ Key findings:
 
 ### 1c. Package as macOS app
 
-- [x] Xcode project (generated via xcodegen from `project.yml`)
+- [x] SwiftPM build (`Package.swift`) with `scripts/bundle-app.sh` for .app assembly
 - [x] SwiftUI app with channel input + WebPlayerView
 - [x] `just sync` / `just build` / `just run` recipes
 
@@ -42,25 +42,6 @@ Key findings:
 - [x] Playback position tracking — resume where you left off, progress bars
 - [x] Open in browser — for liking/commenting (no login in app)
 - [x] Feed refresh — on launch + manual toolbar button
-
-## Phase 2b: iPad port [done]
-
-- [x] iOS target in project.yml sharing the same source folder
-- [x] Platform conditionals for "Open in Browser" (UIApplication vs NSWorkspace)
-- [x] Player bottom bar on iOS (back button + title + open in browser)
-- [x] Consent/cookie management accessible via toolbar menu on iOS
-- [x] `just build-ios` recipe targeting iPad simulator
-
-## Phase 3: tvOS port — not feasible
-
-tvOS has no WebKit/WKWebView, so the core playback approach doesn't work. We explored several alternatives on the `experiment-apple-tv` branch:
-
-- **Innertube API** (ANDROID_VR client identity) — returns direct stream URLs, but YouTube blocks with "sign in to prove you're not a bot"
-- **Headless WKWebView extraction** — YouTube uses MSE/UMP (MediaSource + proprietary chunked protocol), so `video.currentSrc` is a `blob:` URL, not a direct video URL
-- **Fetch interception + n-parameter deciphering** — amounts to reimplementing yt-dlp's signature logic, which is fragile and breaks with every YouTube player update
-- **HTTPS proxy on WKWebView traffic** — can't inspect encrypted traffic without MITM CA, and WKWebView doesn't expose proxy configuration
-
-**Conclusion:** tvOS streaming requires either a WebKit port to tvOS (unlikely from Apple) or maintaining a yt-dlp-equivalent decipher engine (not sustainable for a personal project). Parking this until the platform landscape changes.
 
 ## Ad blocking maintenance
 

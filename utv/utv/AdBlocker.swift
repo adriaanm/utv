@@ -1,5 +1,13 @@
-#if canImport(WebKit)
 import WebKit
+
+private let resourceBundle: Bundle = {
+    // In the .app bundle, resources are in Contents/Resources/.
+    // For `swift run` (no .app), fall back to SwiftPM's Bundle.module.
+    if let url = Bundle.main.url(forResource: "content-rules", withExtension: "json") {
+        return Bundle.main
+    }
+    return Bundle.module
+}()
 
 struct AdBlocker {
     /// Configure a WKWebViewConfiguration with content blocking rules and scriptlet injection.
@@ -19,7 +27,7 @@ struct AdBlocker {
     // MARK: - Content Blocker Rules
 
     private static func compileContentRules(for controller: WKUserContentController) {
-        guard let url = Bundle.main.url(forResource: "content-rules", withExtension: "json"),
+        guard let url = resourceBundle.url(forResource: "content-rules", withExtension: "json"),
               let jsonString = try? String(contentsOf: url, encoding: .utf8) else {
             NSLog("[AdBlocker] content-rules.json not found")
             return
@@ -85,7 +93,7 @@ struct AdBlocker {
     // MARK: - Scriptlet Injection
 
     private static func injectScriptlets(into controller: WKUserContentController) {
-        guard let url = Bundle.main.url(forResource: "ubo-scriptlets", withExtension: "js"),
+        guard let url = resourceBundle.url(forResource: "ubo-scriptlets", withExtension: "js"),
               let bundle = try? String(contentsOf: url, encoding: .utf8) else {
             NSLog("[AdBlocker] ubo-scriptlets.js not found — run 'just sync' first")
             return
@@ -119,4 +127,3 @@ private extension String {
         return "`\(escaped)`"
     }
 }
-#endif
