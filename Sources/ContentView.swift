@@ -52,7 +52,7 @@ struct ContentView: View {
         .toolbar(playingVideo != nil && isFullScreen ? .hidden : .automatic)
         .task {
             // Re-inject existing cookie into WKWebView store on launch
-            if let value = consentManager.socsCookieValue {
+            if consentManager.socsCookieValue != nil {
                 await consentManager.ensureConsent()
             }
         }
