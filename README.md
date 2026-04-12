@@ -10,13 +10,27 @@ If you enjoy a creator's work, support them directly — merch, Patreon, or what
 
 Built with [Claude Code](https://claude.ai/claude-code).
 
-## Setup
+## Install
 
-Requires [Xcode](https://developer.apple.com/xcode/) (for SwiftData macros and `actool`):
+Download and run the latest release (macOS, Apple Silicon):
+
+```sh
+curl -fLo ~/Downloads/utv-macos-arm64.zip https://github.com/adriaanm/utv/releases/download/latest/utv-macos-arm64.zip \
+  && ditto -x -k ~/Downloads/utv-macos-arm64.zip /Applications/ \
+  && xattr -cr /Applications/utv.app \
+  && open /Applications/utv.app
+```
+
+The app is ad-hoc signed (not notarized), so `xattr -cr` is needed to clear the Gatekeeper quarantine flag.
+
+## Build from source
+
+Requires [Xcode](https://developer.apple.com/xcode/):
 
 ```sh
 sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-git clone --recursive <repo-url>
+git clone --recursive https://github.com/adriaanm/utv.git
+cd utv
 just build   # init submodules + build
 just run     # build + launch app
 ```
