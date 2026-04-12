@@ -568,6 +568,7 @@ struct PlayerView: View {
             ) { position, duration in
                 video.lastPosition = position
                 video.duration = duration
+                // Int() truncates toward zero, so early seconds of long videos stay at 0%
                 video.watchPercentage = min(Int(position / duration * 100), 100)
                 video.watchedAt = .now
             }
