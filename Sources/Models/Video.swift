@@ -1,18 +1,18 @@
 import Foundation
 import SwiftData
 
-@Model
+@StoredModel
 final class Video {
-    @Attribute(.unique) var videoID: String
+    @Unique var videoID: String
     var title: String
     var publishedAt: Date
-    var thumbnailURL: String?
+    var thumbnailURL: String? = nil
     var isShort: Bool = false
     var watched: Bool = false
-    var watchedAt: Date?
+    var watchedAt: Date? = nil
     var lastPosition: Double = 0
     var duration: Double = 0
-    var channel: Channel?
+    var channel: Channel? = nil
 
     init(videoID: String, title: String, publishedAt: Date, thumbnailURL: String? = nil) {
         self.videoID = videoID

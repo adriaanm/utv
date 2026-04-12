@@ -38,9 +38,11 @@ Use `just diff-filters` to see what changed upstream in uAssets. Use `just adblo
 ```
 Package.swift           SwiftPM package definition
 Sources/                SwiftUI app source
+  Macros.swift          Public macro declarations (@StoredModel, @Unique, @Relation)
   Models/               SwiftData models (Channel, Video)
   Services/             FeedService (RSS → SwiftData)
   Resources/            content-rules.json, ubo-scriptlets.js
+Macros/UtvMacros/       SwiftPM macro plugin (replaces SwiftData's @Model)
 scripts/
   sync-ubo.sh          Update submodules + extract scriptlet bundle
   bundle-app.sh         Assemble .app bundle from swift build output
@@ -86,12 +88,13 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
 ### Xcode toolchain dependencies
 
-We use `swift build` (not `xcodebuild`), but two things still require Xcode.app to be installed:
+We use `swift build` (not `xcodebuild`), but one thing still requires Xcode.app to be installed:
 
 | Dependency | Used by | Why Xcode | Could be replaced when... |
 |---|---|---|---|
-| **SwiftData macros** (`SwiftDataMacros.PersistentModelMacro`) | `swift build` — expands `@Model`, `@Attribute`, `@Relationship` | The macro plugin binary ships only inside Xcode.app, not in Command Line Tools | SwiftPM gains the ability to build/distribute macro plugins independently, or Apple ships SwiftData macros in the CLI toolchain |
 | **`actool`** (Asset Catalog compiler) | `scripts/bundle-app.sh` — compiles `Assets.xcassets` into `AppIcon.icns` + `Assets.car` | `actool` is an Xcode developer tool, not available standalone | SwiftPM learns to compile asset catalogs natively ([SE-0loading](https://forums.swift.org/t/asset-catalog-support-in-swiftpm/)), or an open-source `actool` alternative emerges |
+
+SwiftData macros (`@Model`, `@Attribute`, `@Relationship`) have been replaced by custom macros (`@StoredModel`, `@Unique`, `@Relation`) in `Macros/UtvMacros/`, built from source via SwiftPM using swift-syntax. This eliminated the dependency on Xcode's `libSwiftDataMacros.dylib`.
 
 Everything else — compilation, linking, code signing, app bundle assembly — works with just the Swift toolchain and standard macOS tools (`codesign`).
 
