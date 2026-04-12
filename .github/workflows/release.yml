@@ -20,11 +20,11 @@ jobs:
       - name: Select Xcode 26.3
         run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
 
-      - name: Build release binary
-        run: swift build -c release
+      - name: Install just
+        run: brew install just
 
-      - name: Bundle .app
-        run: ./scripts/bundle-app.sh release
+      - name: Build and bundle
+        run: just install
 
       - name: Set build metadata
         run: |
