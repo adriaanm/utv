@@ -3,7 +3,7 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Channel.displayName) private var channels: [Channel]
+    @StoredQuery(sort: \Channel.displayName) private var channels: [Channel]
 
     @State private var consentManager = ConsentManager.shared
     @State private var selectedChannel: Channel?
@@ -414,8 +414,13 @@ enum VideoFilter: String, CaseIterable {
 }
 
 struct HomeView: View {
-    @Query(
-        filter: #Predicate<Video> { !$0.isShort },
+    // filter: #Predicate<Video> { !$0.isShort }
+    @StoredQuery(
+        filter: Predicate<Video>({
+            PredicateExpressions.build_Negation(
+                PredicateExpressions.build_KeyPath(root: PredicateExpressions.build_Arg($0), keyPath: \.isShort)
+            )
+        }),
         sort: \Video.publishedAt,
         order: .reverse
     ) private var allVideos: [Video]

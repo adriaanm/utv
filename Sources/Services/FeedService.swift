@@ -15,7 +15,13 @@ final class FeedService {
         let feedResult = try await ChannelFeed.fetchFeed(channelID: channelID)
 
         // Check if channel already exists
-        let descriptor = FetchDescriptor<Channel>(predicate: #Predicate { $0.channelID == channelID })
+        // #Predicate<Channel> { $0.channelID == channelID }
+        let descriptor = FetchDescriptor<Channel>(predicate: Predicate<Channel>({
+            PredicateExpressions.build_Equal(
+                lhs: PredicateExpressions.build_KeyPath(root: PredicateExpressions.build_Arg($0), keyPath: \.channelID),
+                rhs: PredicateExpressions.build_Arg(channelID)
+            )
+        }))
         if let existing = try modelContext.fetch(descriptor).first {
             // Refresh instead of duplicating
             try await refreshChannel(existing)

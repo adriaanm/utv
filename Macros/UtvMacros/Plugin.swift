@@ -7,5 +7,6 @@ struct UtvMacrosPlugin: CompilerPlugin {
         StoredModelMacro.self,
         StoredPropertyMacro.self,
         MarkerMacro.self,
+        QueryMacro.self,
     ]
 }

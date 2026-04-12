@@ -6,15 +6,6 @@ sync:
 
 # Build the app (debug)
 build: _ensure-resources
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # SwiftData macros require the Xcode toolchain (not just Command Line Tools)
-    DEV_DIR="$(xcode-select -p 2>/dev/null || true)"
-    if [[ "$DEV_DIR" != */Xcode.app/* ]]; then
-        echo "error: SwiftData macros require the Xcode toolchain. Install Xcode and run:" >&2
-        echo "  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer" >&2
-        exit 1
-    fi
     swift build
 
 # Build and assemble + launch .app bundle

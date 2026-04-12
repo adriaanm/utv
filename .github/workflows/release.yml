@@ -17,8 +17,8 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Select Xcode 26.3
-        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+      - name: Use Command Line Tools only (no Xcode)
+        run: sudo xcode-select -s /Library/Developer/CommandLineTools
 
       - name: Install just
         run: brew install just

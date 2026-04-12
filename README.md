@@ -25,12 +25,10 @@ The app is ad-hoc signed (not notarized), so `xattr -cr` is needed to clear the 
 
 ## Build from source
 
-Requires [Xcode](https://developer.apple.com/xcode/):
+Requires a Swift toolchain (Xcode or [Xcode Command Line Tools](https://developer.apple.com/xcode/resources/)), [just](https://github.com/casey/just), and git:
 
 ```sh
-sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-git clone --recursive https://github.com/adriaanm/utv.git
-cd utv
-just build   # init submodules + build
-just run     # build + launch app
+brew install just git && xcode-select --install
+git clone --recursive https://github.com/adriaanm/utv.git && cd utv
+just run   # sync filters + build + launch
 ```
