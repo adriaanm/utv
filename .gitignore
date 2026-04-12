@@ -16,3 +16,4 @@ Sources/Resources/ubo-scriptlets.js
 *.xcuserdata
 DerivedData/
 build/
+.claude/
