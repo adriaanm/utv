@@ -26,6 +26,7 @@ struct ContentView: View {
             detail
         }
         .task {
+            backfillWatchPercentages()
             await refreshAll()
             // Refresh every 30 minutes while running
             while !Task.isCancelled {
@@ -233,6 +234,18 @@ struct ContentView: View {
     private func stopPlaying() {
         playingVideo = nil
         columnVisibility = .automatic
+    }
+
+    /// One-time migration: populate watchPercentage from existing lastPosition/duration data
+    private func backfillWatchPercentages() {
+        let descriptor = FetchDescriptor<Video>(
+            predicate: #Predicate<Video> { $0.lastPosition > 0 && $0.duration > 0 && $0.watchPercentage == 0 }
+        )
+        guard let videos = try? modelContext.fetch(descriptor), !videos.isEmpty else { return }
+        for video in videos {
+            video.watchPercentage = min(Int(video.lastPosition / video.duration * 100), 100)
+            video.watchedAt = .now
+        }
     }
 
     private func refreshAll() async {

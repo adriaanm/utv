@@ -79,6 +79,8 @@ When changing how video metadata is displayed, update both `VideoRow` and `HomeV
 
 `Video.duration` starts at 0 and is populated either by `ChannelBrowser` scraping or by the player — whichever happens first.
 
+The SwiftData store lives at `~/Library/Containers/com.utv.app/Data/Library/Application Support/default.store` (SQLite).
+
 ## Build
 
 Builds with SwiftPM (`swift build`). Requires the Xcode toolchain:
