@@ -257,6 +257,8 @@ struct ContentView: View {
         isRefreshing = true
         await feedService.refreshAll()
         isRefreshing = false
+        // Backfill durations lazily in the background
+        Task { await feedService.backfillDurations() }
     }
 }
 
@@ -382,9 +384,13 @@ struct VideoRow: View {
 
                 HStack(spacing: 8) {
                     Text(video.publishedAt, style: .relative)
-                    if video.lastPosition > 0 && video.duration > 0 {
+                    if video.duration > 0 {
                         Text("·")
-                        Text("\(formatTime(video.lastPosition)) / \(formatTime(video.duration))")
+                        if video.lastPosition > 0 {
+                            Text("\(formatTime(video.lastPosition)) / \(formatTime(video.duration))")
+                        } else {
+                            Text(formatTime(video.duration))
+                        }
                     }
                 }
                 .font(.caption)
@@ -533,9 +539,13 @@ struct HomeVideoRow: View {
                             .foregroundStyle(.blue)
                     }
                     Text(video.publishedAt, style: .relative)
-                    if video.lastPosition > 0 && video.duration > 0 {
+                    if video.duration > 0 {
                         Text("·")
-                        Text("\(formatTime(video.lastPosition)) / \(formatTime(video.duration))")
+                        if video.lastPosition > 0 {
+                            Text("\(formatTime(video.lastPosition)) / \(formatTime(video.duration))")
+                        } else {
+                            Text(formatTime(video.duration))
+                        }
                     }
                 }
                 .font(.caption)

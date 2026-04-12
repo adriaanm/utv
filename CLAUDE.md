@@ -48,6 +48,34 @@ third_party/            Git submodules (uAssets, uBOL-home, uBlock)
 docs/                   Documentation and guides
 ```
 
+## App architecture
+
+### Views (ContentView.swift)
+
+The UI is a three-column `NavigationSplitView`: sidebar (channel list), content (video list), detail (player).
+
+Three video list views share similar row layouts but are separate structs:
+
+- **`VideoRow`** — used in the per-channel video list (content column). Shows thumbnail, title, relative date, duration, watch progress.
+- **`HomeVideoRow`** — used in both `HomeView` (unwatched across all channels) and `HistoryView` (watched, sorted by `watchedAt`). Same layout as `VideoRow` but adds the channel handle.
+- **`HistoryView`** — reuses `HomeVideoRow`; no row struct of its own.
+
+When changing how video metadata is displayed, update both `VideoRow` and `HomeVideoRow`.
+
+### Data flow
+
+- **Video discovery**: RSS feeds (`ChannelFeed`) provide video ID, title, date, thumbnail — but no duration.
+- **Pagination**: `ChannelBrowser` scrapes YouTube's `/videos` tab (ytInitialData JSON). This data includes duration in the video grid overlay, which is extracted and stored.
+- **Duration backfill**: After each feed refresh, `FeedService.backfillDurations()` runs as a background task, fetching the `/videos` page for channels that have videos without durations.
+- **Player-reported duration**: When a video is played, `WebPlayerView` reports position and duration via JS message handler. This always overwrites any scraped value, so the player is the source of truth.
+
+### Models (SwiftData)
+
+- **`Channel`** — `channelID`, `handle`, `displayName`, `continuation` (pagination token), `videos` relationship.
+- **`Video`** — `videoID`, `title`, `publishedAt`, `thumbnailURL`, `isShort`, `watched`, `watchedAt`, `lastPosition`, `duration`, `channel` relationship.
+
+`Video.duration` starts at 0 and is populated either by `ChannelBrowser` scraping or by the player — whichever happens first.
+
 ## Build
 
 Builds with SwiftPM (`swift build`). Requires the Xcode toolchain:

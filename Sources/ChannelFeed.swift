@@ -6,6 +6,7 @@ struct VideoInfo {
     let publishedAt: Date
     let thumbnailURL: String?
     var isShort: Bool = false
+    var durationSeconds: Double = 0
 }
 
 struct ChannelFeedResult {

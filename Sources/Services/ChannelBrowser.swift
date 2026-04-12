@@ -219,7 +219,36 @@ struct ChannelBrowser {
             thumbnailURL = nil
         }
 
-        return VideoInfo(videoID: videoID, title: title, publishedAt: publishedAt, thumbnailURL: thumbnailURL)
+        // Duration — from lengthText overlay or inline
+        var durationSeconds: Double = 0
+        if let overlays = renderer["thumbnailOverlays"] as? [[String: Any]] {
+            for overlay in overlays {
+                if let timeStatus = overlay["thumbnailOverlayTimeStatusRenderer"] as? [String: Any],
+                   let textObj = timeStatus["text"] as? [String: Any],
+                   let simpleText = textObj["simpleText"] as? String {
+                    durationSeconds = parseDurationText(simpleText)
+                    break
+                }
+            }
+        }
+        if durationSeconds == 0,
+           let lengthText = renderer["lengthText"] as? [String: Any],
+           let simpleText = lengthText["simpleText"] as? String {
+            durationSeconds = parseDurationText(simpleText)
+        }
+
+        return VideoInfo(videoID: videoID, title: title, publishedAt: publishedAt, thumbnailURL: thumbnailURL, durationSeconds: durationSeconds)
+    }
+
+    /// Parse duration text like "12:34" or "1:02:15" into seconds.
+    private static func parseDurationText(_ text: String) -> Double {
+        let parts = text.split(separator: ":").compactMap { Double($0) }
+        switch parts.count {
+        case 3: return parts[0] * 3600 + parts[1] * 60 + parts[2]
+        case 2: return parts[0] * 60 + parts[1]
+        case 1: return parts[0]
+        default: return 0
+        }
     }
 
     /// Parse YouTube's relative date strings like "2 days ago", "3 weeks ago".

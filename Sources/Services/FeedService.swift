@@ -101,22 +101,57 @@ final class FeedService {
             result = try await ChannelBrowser.fetchFirstPage(channelID: channel.channelID)
         }
 
-        let existingIDs = Set(channel.videos.map(\.videoID))
-        for info in result.videos where !existingIDs.contains(info.videoID) {
-            let video = Video(
-                videoID: info.videoID,
-                title: info.title,
-                publishedAt: info.publishedAt,
-                thumbnailURL: info.thumbnailURL
-            )
-            video.isShort = info.isShort
-            video.channel = channel
-            modelContext.insert(video)
+        let existingByID = Dictionary(uniqueKeysWithValues: channel.videos.map { ($0.videoID, $0) })
+        for info in result.videos {
+            if let existing = existingByID[info.videoID] {
+                // Backfill duration if not yet known from the player
+                if existing.duration == 0 && info.durationSeconds > 0 {
+                    existing.duration = info.durationSeconds
+                }
+            } else {
+                let video = Video(
+                    videoID: info.videoID,
+                    title: info.title,
+                    publishedAt: info.publishedAt,
+                    thumbnailURL: info.thumbnailURL
+                )
+                video.isShort = info.isShort
+                video.duration = info.durationSeconds
+                video.channel = channel
+                modelContext.insert(video)
+            }
         }
 
         // Store continuation token (nil → "" means no more pages)
         channel.continuation = result.continuation ?? ""
         try modelContext.save()
+    }
+
+    /// Backfill durations for videos that don't have one yet.
+    /// Fetches the channel /videos page (which includes duration in the grid)
+    /// and updates any matching videos. Runs lazily — skips channels where
+    /// all videos already have durations.
+    func backfillDurations() async {
+        let descriptor = FetchDescriptor<Channel>()
+        guard let channels = try? modelContext.fetch(descriptor) else { return }
+
+        for channel in channels {
+            let needsDuration = channel.videos.contains { !$0.isShort && $0.duration == 0 }
+            guard needsDuration else { continue }
+
+            guard let result = try? await ChannelBrowser.fetchFirstPage(channelID: channel.channelID) else {
+                continue
+            }
+
+            let videosByID = Dictionary(uniqueKeysWithValues: channel.videos.map { ($0.videoID, $0) })
+            for info in result.videos where info.durationSeconds > 0 {
+                if let video = videosByID[info.videoID], video.duration == 0 {
+                    video.duration = info.durationSeconds
+                }
+            }
+
+            try? modelContext.save()
+        }
     }
 
     private func upsertVideos(for channel: Channel, from feedResult: ChannelFeedResult) {
