@@ -22,16 +22,10 @@ if [ -d "$BUILD_DIR/utv_utv.bundle" ]; then
     cp -R "$BUILD_DIR/utv_utv.bundle/"* "$RESOURCES/" 2>/dev/null || true
 fi
 
-# Compile asset catalog (produces AppIcon.icns and Assets.car)
-XCASSETS="$RESOURCES/Assets.xcassets"
-if [ -d "$XCASSETS" ]; then
-    actool --compile "$RESOURCES" \
-           --platform macosx \
-           --minimum-deployment-target 14.0 \
-           --app-icon AppIcon \
-           --output-partial-info-plist /dev/null \
-           "$XCASSETS" > /dev/null
-    rm -rf "$XCASSETS"
+# Build app icon from .iconset (no Xcode/actool needed)
+ICONSET="$REPO_ROOT/AppIcon.iconset"
+if [ -d "$ICONSET" ]; then
+    iconutil -c icns "$ICONSET" -o "$RESOURCES/AppIcon.icns"
 fi
 
 # Generate Info.plist

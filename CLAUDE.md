@@ -88,15 +88,12 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
 ### Xcode toolchain dependencies
 
-We use `swift build` (not `xcodebuild`), but one thing still requires Xcode.app to be installed:
+No Xcode.app dependencies remain. The build uses only the Swift toolchain and standard macOS tools:
 
-| Dependency | Used by | Why Xcode | Could be replaced when... |
-|---|---|---|---|
-| **`actool`** (Asset Catalog compiler) | `scripts/bundle-app.sh` — compiles `Assets.xcassets` into `AppIcon.icns` + `Assets.car` | `actool` is an Xcode developer tool, not available standalone | SwiftPM learns to compile asset catalogs natively ([SE-0loading](https://forums.swift.org/t/asset-catalog-support-in-swiftpm/)), or an open-source `actool` alternative emerges |
+- **SwiftData macros** — replaced by custom macros (`@StoredModel`, `@Unique`, `@Relation`) in `Macros/UtvMacros/`, built from source via SwiftPM with swift-syntax.
+- **`actool`** — replaced by `iconutil` (ships with Command Line Tools). The app icon lives in `AppIcon.iconset/` and is compiled to `.icns` by `bundle-app.sh`.
 
-SwiftData macros (`@Model`, `@Attribute`, `@Relationship`) have been replaced by custom macros (`@StoredModel`, `@Unique`, `@Relation`) in `Macros/UtvMacros/`, built from source via SwiftPM using swift-syntax. This eliminated the dependency on Xcode's `libSwiftDataMacros.dylib`.
-
-Everything else — compilation, linking, code signing, app bundle assembly — works with just the Swift toolchain and standard macOS tools (`codesign`).
+Compilation, linking, code signing, and app bundle assembly all work with just the Swift toolchain, `iconutil`, and `codesign`.
 
 ## Just recipes
 

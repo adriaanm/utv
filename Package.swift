@@ -20,7 +20,6 @@ let package = Package(
                 "utv.entitlements",
             ],
             resources: [
-                .process("Assets.xcassets"),
                 .process("Resources"),
             ]
         ),
