@@ -10,15 +10,15 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-14  # Apple Silicon runner, ships with Xcode + Swift
+    runs-on: macos-15  # Apple Silicon runner
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           submodules: recursive
 
-      - name: Select Xcode toolchain
-        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+      - name: Select Xcode 26.3
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
 
       - name: Build release binary
         run: swift build -c release
