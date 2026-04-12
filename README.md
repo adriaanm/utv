@@ -30,5 +30,6 @@ Requires [Homebrew](https://brew.sh) and [just](https://github.com/casey/just):
 ```sh
 brew install just
 git clone --recursive https://github.com/adriaanm/utv.git && cd utv
-just run   # sync filters + build + launch
+just run       # sync filters + build + launch
+just install   # release build + install to /Applications
 ```
