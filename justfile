@@ -26,12 +26,17 @@ run: build
 _ensure-resources:
     ./scripts/sync-ubo.sh
 
-# Build release and install to /Applications
-install: _ensure-resources
+# Build release .app bundle into .build/utv.app
+build-release: _ensure-resources
     #!/usr/bin/env bash
     set -euo pipefail
     swift build -c release
     ./scripts/bundle-app.sh release
+
+# Build release and install to /Applications
+install: build-release
+    #!/usr/bin/env bash
+    set -euo pipefail
     rm -rf /Applications/utv.app
     cp -R .build/utv.app /Applications/utv.app
     xattr -cr /Applications/utv.app
