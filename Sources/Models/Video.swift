@@ -8,7 +8,7 @@ final class Video {
     var publishedAt: Date
     var thumbnailURL: String? = nil
     var isShort: Bool = false
-    var watched: Bool = false
+    var watchPercentage: Int = 0
     var watchedAt: Date? = nil
     var lastPosition: Double = 0
     var duration: Double = 0

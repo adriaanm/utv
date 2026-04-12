@@ -16,7 +16,7 @@ final class Channel {
     var continuation: String? = nil
 
     var unwatchedCount: Int {
-        videos.filter { !$0.watched && !$0.isShort }.count
+        videos.filter { $0.watchPercentage == 0 && !$0.isShort }.count
     }
 
     var hasMoreVideos: Bool {

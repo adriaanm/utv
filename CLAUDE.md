@@ -56,11 +56,10 @@ docs/                   Documentation and guides
 
 The UI is a three-column `NavigationSplitView`: sidebar (channel list), content (video list), detail (player).
 
-Three video list views share similar row layouts but are separate structs:
+Two video list views share similar row layouts but are separate structs:
 
 - **`VideoRow`** — used in the per-channel video list (content column). Shows thumbnail, title, relative date, duration, watch progress.
-- **`HomeVideoRow`** — used in both `HomeView` (unwatched across all channels) and `HistoryView` (watched, sorted by `watchedAt`). Same layout as `VideoRow` but adds the channel handle.
-- **`HistoryView`** — reuses `HomeVideoRow`; no row struct of its own.
+- **`HomeVideoRow`** — used in `HomeView` with a segmented filter (Unwatched / Started / Watched). Same layout as `VideoRow` but adds the channel handle.
 
 When changing how video metadata is displayed, update both `VideoRow` and `HomeVideoRow`.
 
@@ -74,7 +73,9 @@ When changing how video metadata is displayed, update both `VideoRow` and `HomeV
 ### Models (SwiftData)
 
 - **`Channel`** — `channelID`, `handle`, `displayName`, `continuation` (pagination token), `videos` relationship.
-- **`Video`** — `videoID`, `title`, `publishedAt`, `thumbnailURL`, `isShort`, `watched`, `watchedAt`, `lastPosition`, `duration`, `channel` relationship.
+- **`Video`** — `videoID`, `title`, `publishedAt`, `thumbnailURL`, `isShort`, `watchPercentage` (0–100), `watchedAt`, `lastPosition`, `duration`, `channel` relationship.
+
+`Video.watchPercentage` is updated from the player's JS position reports (currentTime/duration). Clicking play does not mark a video as watched — only actual playback progress changes the percentage. Videos with ≥90% are considered "watched", >0% but <90% are "started".
 
 `Video.duration` starts at 0 and is populated either by `ChannelBrowser` scraping or by the player — whichever happens first.
 

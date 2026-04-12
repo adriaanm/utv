@@ -7,7 +7,6 @@ struct ContentView: View {
 
     @State private var consentManager = ConsentManager.shared
     @State private var selectedChannel: Channel?
-    @State private var showingHistory = false
     @State private var playingVideo: Video?
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var handleInput = ""
@@ -36,7 +35,6 @@ struct ContentView: View {
         }
         .onChange(of: selectedChannel) { _, newValue in
             if newValue != nil {
-                showingHistory = false
                 if playingVideo != nil {
                     playingVideo = nil
                     columnVisibility = .automatic
@@ -120,21 +118,11 @@ struct ContentView: View {
             Section {
                 Button {
                     selectedChannel = nil
-                    showingHistory = false
                 } label: {
                     Label("Home", systemImage: "house")
                 }
                 .buttonStyle(.plain)
-                .fontWeight(selectedChannel == nil && !showingHistory ? .semibold : .regular)
-
-                Button {
-                    selectedChannel = nil
-                    showingHistory = true
-                } label: {
-                    Label("History", systemImage: "clock.arrow.circlepath")
-                }
-                .buttonStyle(.plain)
-                .fontWeight(showingHistory ? .semibold : .regular)
+                .fontWeight(selectedChannel == nil ? .semibold : .regular)
             }
 
             Section("Channels") {
@@ -178,10 +166,6 @@ struct ContentView: View {
             }
         } else if let selectedChannel {
             VideoListView(channel: selectedChannel) { video in
-                play(video)
-            }
-        } else if showingHistory {
-            HistoryView { video in
                 play(video)
             }
         } else {
@@ -235,15 +219,13 @@ struct ContentView: View {
     }
 
     private func markAllWatched(_ channel: Channel) {
-        for video in channel.videos where !video.watched {
-            video.watched = true
+        for video in channel.videos where video.watchPercentage < 100 {
+            video.watchPercentage = 100
             video.watchedAt = .now
         }
     }
 
     private func play(_ video: Video) {
-        video.watched = true
-        video.watchedAt = .now
         playingVideo = video
         columnVisibility = .detailOnly
     }
@@ -379,7 +361,7 @@ struct VideoRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(video.title)
-                    .fontWeight(video.watched ? .regular : .semibold)
+                    .fontWeight(video.watchPercentage > 0 ? .regular : .semibold)
                     .lineLimit(2)
 
                 HStack(spacing: 8) {
@@ -413,7 +395,7 @@ struct VideoRow: View {
 
             Spacer()
 
-            if !video.watched {
+            if video.watchPercentage == 0 {
                 Circle()
                     .fill(.blue)
                     .frame(width: 8, height: 8)
@@ -423,73 +405,61 @@ struct VideoRow: View {
     }
 }
 
-// MARK: - History View
-
-struct HistoryView: View {
-    @Query(
-        filter: #Predicate<Video> { $0.watched },
-        sort: \Video.watchedAt,
-        order: .reverse
-    ) private var watchedVideos: [Video]
-
-    let onPlay: (Video) -> Void
-
-    var body: some View {
-        Group {
-            if watchedVideos.isEmpty {
-                ContentUnavailableView(
-                    "No Watch History",
-                    systemImage: "clock.arrow.circlepath",
-                    description: Text("Videos you watch will appear here")
-                )
-            } else {
-                List {
-                    ForEach(watchedVideos) { video in
-                        Button { onPlay(video) } label: {
-                            HomeVideoRow(video: video)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("Open in Browser") {
-                                let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
-                                                NSWorkspace.shared.open(url)
-                            }
-                            if video.lastPosition > 0 {
-                                Button("Resume at \(formatTime(video.lastPosition))") {
-                                    onPlay(video)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .navigationTitle("History")
-    }
-}
-
 // MARK: - Home View
+
+enum VideoFilter: String, CaseIterable {
+    case unwatched = "Unwatched"
+    case started = "Started"
+    case watched = "Watched"
+}
 
 struct HomeView: View {
     @Query(
-        filter: #Predicate<Video> { !$0.isShort && !$0.watched },
+        filter: #Predicate<Video> { !$0.isShort },
         sort: \Video.publishedAt,
         order: .reverse
-    ) private var unwatchedVideos: [Video]
+    ) private var allVideos: [Video]
 
+    @State private var filter: VideoFilter = .unwatched
     let onPlay: (Video) -> Void
+
+    private var filteredVideos: [Video] {
+        switch filter {
+        case .unwatched:
+            allVideos.filter { $0.watchPercentage == 0 }
+        case .started:
+            allVideos.filter { $0.watchPercentage > 0 && $0.watchPercentage < 90 }
+        case .watched:
+            allVideos.filter { $0.watchPercentage >= 90 }
+        }
+    }
 
     var body: some View {
         Group {
-            if unwatchedVideos.isEmpty {
-                ContentUnavailableView(
-                    "No Unwatched Videos",
-                    systemImage: "tv",
-                    description: Text("Add a channel with @handle to get started")
-                )
+            if filteredVideos.isEmpty {
+                switch filter {
+                case .unwatched:
+                    ContentUnavailableView(
+                        "No Unwatched Videos",
+                        systemImage: "tv",
+                        description: Text("Add a channel with @handle to get started")
+                    )
+                case .started:
+                    ContentUnavailableView(
+                        "No Videos In Progress",
+                        systemImage: "play.circle",
+                        description: Text("Videos you start watching will appear here")
+                    )
+                case .watched:
+                    ContentUnavailableView(
+                        "No Watched Videos",
+                        systemImage: "checkmark.circle",
+                        description: Text("Videos you finish will appear here")
+                    )
+                }
             } else {
                 List {
-                    ForEach(unwatchedVideos) { video in
+                    ForEach(filteredVideos) { video in
                         Button { onPlay(video) } label: {
                             HomeVideoRow(video: video)
                         }
@@ -497,7 +467,7 @@ struct HomeView: View {
                         .contextMenu {
                             Button("Open in Browser") {
                                 let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
-                                                NSWorkspace.shared.open(url)
+                                NSWorkspace.shared.open(url)
                             }
                             if video.lastPosition > 0 {
                                 Button("Resume at \(formatTime(video.lastPosition))") {
@@ -510,6 +480,17 @@ struct HomeView: View {
             }
         }
         .navigationTitle("Home")
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Picker("Filter", selection: $filter) {
+                    ForEach(VideoFilter.allCases, id: \.self) { filter in
+                        Text(filter.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 260)
+            }
+        }
     }
 }
 
@@ -530,7 +511,7 @@ struct HomeVideoRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(video.title)
-                    .fontWeight(.semibold)
+                    .fontWeight(video.watchPercentage > 0 ? .regular : .semibold)
                     .lineLimit(2)
 
                 HStack(spacing: 8) {
@@ -587,6 +568,8 @@ struct PlayerView: View {
             ) { position, duration in
                 video.lastPosition = position
                 video.duration = duration
+                video.watchPercentage = min(Int(position / duration * 100), 100)
+                video.watchedAt = .now
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
