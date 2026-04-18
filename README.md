@@ -1,12 +1,10 @@
 # <img src="docs/icon.png" width="32" height="32" alt="utv icon"> utv
 
-A simple YouTube browser for macOS. Like an old-school TV: pick a channel, watch a video. No ads.
+A personal YouTube viewer for macOS. Subscribe to channels, browse their videos, watch without ads. No shorts, no recommendations, no algorithm.
 
-No login, no Google account, no YouTube API. All state is local. You can't like, comment, or subscribe — use "Open in Browser" for that.
+Videos are grouped by watch state — unwatched, started, watched — and resume where you left off. Subscriptions and watch history live on your machine; nothing is sent anywhere.
 
-Ad blocking is powered by [uBlock Origin](https://github.com/gorhill/uBlock) filter lists, compiled into WebKit content blockers.
-
-If you enjoy a creator's work, support them directly — merch, Patreon, or whatever they offer.
+No Google login and no YouTube API: channels are tracked via their public `/videos` page, ads are stripped by [uBlock Origin](https://github.com/gorhill/uBlock) filter lists compiled into WebKit content blockers. Liking, commenting, and subscribing aren't supported — use "Open in Browser" for that, and support creators directly through whatever they offer.
 
 Built with [Claude Code](https://claude.ai/claude-code).
 
