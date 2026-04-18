@@ -239,8 +239,6 @@ struct ContentView: View {
         isRefreshing = true
         await feedService.refreshAll()
         isRefreshing = false
-        // Backfill durations lazily in the background
-        Task { await feedService.backfillDurations() }
     }
 }
 
@@ -287,9 +285,7 @@ struct VideoListView: View {
     }
 
     private var sortedVideos: [Video] {
-        channel.videos
-            .filter { !$0.isShort }
-            .sorted { $0.publishedAt > $1.publishedAt }
+        channel.videos.sorted { $0.publishedAt > $1.publishedAt }
     }
 
     var body: some View {
@@ -414,13 +410,7 @@ enum VideoFilter: String, CaseIterable {
 }
 
 struct HomeView: View {
-    // filter: #Predicate<Video> { !$0.isShort }
     @StoredQuery(
-        filter: Predicate<Video>({
-            PredicateExpressions.build_Negation(
-                PredicateExpressions.build_KeyPath(root: PredicateExpressions.build_Arg($0), keyPath: \.isShort)
-            )
-        }),
         sort: \Video.publishedAt,
         order: .reverse
     ) private var allVideos: [Video]

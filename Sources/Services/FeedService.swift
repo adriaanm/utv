@@ -10,9 +10,10 @@ final class FeedService {
     }
 
     /// Resolve a @handle, add channel + its videos to the database.
+    /// Videos come from the `/videos` tab scrape — shorts, livestreams, and
+    /// unlisted videos are naturally excluded because YouTube doesn't list them there.
     func addChannel(handle: String) async throws -> Channel {
         let channelID = try await ChannelFeed.resolveChannelID(from: handle)
-        let feedResult = try await ChannelFeed.fetchFeed(channelID: channelID)
 
         // Check if channel already exists
         // #Predicate<Channel> { $0.channelID == channelID }
@@ -23,58 +24,47 @@ final class FeedService {
             )
         }))
         if let existing = try modelContext.fetch(descriptor).first {
-            // Refresh instead of duplicating
             try await refreshChannel(existing)
             return existing
         }
 
-        let normalizedHandle = handle.hasPrefix("@") ? handle : "@\(feedResult.channelName)"
+        let result = try await ChannelBrowser.fetchFirstPage(channelID: channelID)
+        let displayName = result.channelName ?? handle.trimmingCharacters(in: CharacterSet(charactersIn: "@"))
+        let normalizedHandle = handle.hasPrefix("@") ? handle : "@\(displayName)"
         let channel = Channel(
             channelID: channelID,
             handle: normalizedHandle,
-            displayName: feedResult.channelName
+            displayName: displayName
         )
         modelContext.insert(channel)
 
-        for info in feedResult.videos {
-            let video = Video(
-                videoID: info.videoID,
-                title: info.title,
-                publishedAt: info.publishedAt,
-                thumbnailURL: info.thumbnailURL
-            )
-            video.isShort = info.isShort
-            video.channel = channel
-            modelContext.insert(video)
-        }
+        upsertBrowseVideos(result.videos, into: channel)
+        channel.continuation = result.continuation ?? ""
 
         try modelContext.save()
         return channel
     }
 
-    /// Re-fetch RSS for a channel, insert only new videos.
+    /// Refresh a channel: rescrape `/videos` first page, refresh durations, and
+    /// delete any DB video within that scrape's time window that isn't in the
+    /// scrape result — those are shorts / livestreams / unlisted.
     func refreshChannel(_ channel: Channel) async throws {
-        let feedResult = try await ChannelFeed.fetchFeed(channelID: channel.channelID)
+        let browseResult = try await ChannelBrowser.fetchFirstPage(channelID: channel.channelID)
+        let browseIDs = Set(browseResult.videos.map(\.videoID))
 
-        let existingIDs = Set(channel.videos.map(\.videoID))
-
-        for info in feedResult.videos where !existingIDs.contains(info.videoID) {
-            let video = Video(
-                videoID: info.videoID,
-                title: info.title,
-                publishedAt: info.publishedAt,
-                thumbnailURL: info.thumbnailURL
-            )
-            video.isShort = info.isShort
-            video.channel = channel
-            modelContext.insert(video)
+        // Use the oldest video in the scrape as the cleanup boundary. Anything
+        // newer than that that /videos doesn't list must be non-standard.
+        if let boundary = browseResult.videos.map(\.publishedAt).min() {
+            for video in channel.videos
+            where video.publishedAt >= boundary && !browseIDs.contains(video.videoID) {
+                modelContext.delete(video)
+            }
         }
 
-        // Update display name in case it changed
-        if !feedResult.channelName.isEmpty {
-            channel.displayName = feedResult.channelName
+        upsertBrowseVideos(browseResult.videos, into: channel)
+        if let name = browseResult.channelName, !name.isEmpty {
+            channel.displayName = name
         }
-
         try modelContext.save()
     }
 
@@ -85,12 +75,8 @@ final class FeedService {
 
         await withTaskGroup(of: Void.self) { group in
             for channel in channels {
-                let channelID = channel.channelID
                 group.addTask { [weak self] in
-                    guard let self else { return }
-                    // Fetch feed off main actor context
-                    guard let feedResult = try? await ChannelFeed.fetchFeed(channelID: channelID) else { return }
-                    await self.upsertVideos(for: channel, from: feedResult)
+                    try? await self?.refreshChannel(channel)
                 }
             }
         }
@@ -107,10 +93,16 @@ final class FeedService {
             result = try await ChannelBrowser.fetchFirstPage(channelID: channel.channelID)
         }
 
+        upsertBrowseVideos(result.videos, into: channel)
+        channel.continuation = result.continuation ?? ""
+        try modelContext.save()
+    }
+
+    private func upsertBrowseVideos(_ infos: [VideoInfo], into channel: Channel) {
         let existingByID = Dictionary(uniqueKeysWithValues: channel.videos.map { ($0.videoID, $0) })
-        for info in result.videos {
+        for info in infos {
             if let existing = existingByID[info.videoID] {
-                // Backfill duration if not yet known from the player
+                // Update duration if not yet known from the player
                 if existing.duration == 0 && info.durationSeconds > 0 {
                     existing.duration = info.durationSeconds
                 }
@@ -121,64 +113,10 @@ final class FeedService {
                     publishedAt: info.publishedAt,
                     thumbnailURL: info.thumbnailURL
                 )
-                video.isShort = info.isShort
                 video.duration = info.durationSeconds
                 video.channel = channel
                 modelContext.insert(video)
             }
         }
-
-        // Store continuation token (nil → "" means no more pages)
-        channel.continuation = result.continuation ?? ""
-        try modelContext.save()
-    }
-
-    /// Backfill durations for videos that don't have one yet.
-    /// Fetches the channel /videos page (which includes duration in the grid)
-    /// and updates any matching videos. Runs lazily — skips channels where
-    /// all videos already have durations.
-    func backfillDurations() async {
-        let descriptor = FetchDescriptor<Channel>()
-        guard let channels = try? modelContext.fetch(descriptor) else { return }
-
-        for channel in channels {
-            let needsDuration = channel.videos.contains { !$0.isShort && $0.duration == 0 }
-            guard needsDuration else { continue }
-
-            guard let result = try? await ChannelBrowser.fetchFirstPage(channelID: channel.channelID) else {
-                continue
-            }
-
-            let videosByID = Dictionary(uniqueKeysWithValues: channel.videos.map { ($0.videoID, $0) })
-            for info in result.videos where info.durationSeconds > 0 {
-                if let video = videosByID[info.videoID], video.duration == 0 {
-                    video.duration = info.durationSeconds
-                }
-            }
-
-            try? modelContext.save()
-        }
-    }
-
-    private func upsertVideos(for channel: Channel, from feedResult: ChannelFeedResult) {
-        let existingIDs = Set(channel.videos.map(\.videoID))
-
-        for info in feedResult.videos where !existingIDs.contains(info.videoID) {
-            let video = Video(
-                videoID: info.videoID,
-                title: info.title,
-                publishedAt: info.publishedAt,
-                thumbnailURL: info.thumbnailURL
-            )
-            video.isShort = info.isShort
-            video.channel = channel
-            modelContext.insert(video)
-        }
-
-        if !feedResult.channelName.isEmpty {
-            channel.displayName = feedResult.channelName
-        }
-
-        try? modelContext.save()
     }
 }

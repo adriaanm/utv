@@ -65,19 +65,21 @@ When changing how video metadata is displayed, update both `VideoRow` and `HomeV
 
 ### Data flow
 
-- **Video discovery**: RSS feeds (`ChannelFeed`) provide video ID, title, date, thumbnail — but no duration.
-- **Pagination**: `ChannelBrowser` scrapes YouTube's `/videos` tab (ytInitialData JSON). This data includes duration in the video grid overlay, which is extracted and stored.
-- **Duration backfill**: After each feed refresh, `FeedService.backfillDurations()` runs as a background task, fetching the `/videos` page for channels that have videos without durations.
-- **Player-reported duration**: When a video is played, `WebPlayerView` reports position and duration via JS message handler. This always overwrites any scraped value, so the player is the source of truth.
+The `/videos` tab scrape is the source of truth for Video records. Anything that appears in the DB's time window for a channel but isn't in the `/videos` scrape is treated as a short / livestream / unlisted and deleted.
+
+- **Refresh**: `FeedService.refreshChannel` rescrapes the channel's `/videos` first page. It takes the oldest `publishedAt` in that scrape as a cleanup boundary — any DB video newer than the boundary whose ID isn't in the browse result gets deleted. Then it upserts the browse result (filling durations for anything still at 0). Runs every time a refresh happens; there's no "skip if nothing new" optimization. RSS plays no role in refresh.
+- **Browse scrape**: `ChannelBrowser` parses YouTube's `/videos` tab (ytInitialData JSON) for both initial channel add and pagination. It yields video IDs, titles, relative dates, thumbnails, and durations from the grid overlay. The channel's display name also comes from this scrape (`metadata.channelMetadataRenderer.title`).
+- **Shorts / livestreams / unlisted**: naturally excluded because YouTube's `/videos` tab omits them. No client-side detection needed — if it's not in the browse result, it doesn't become a Video record (and refresh will delete any that previously did).
+- **Player-reported duration**: When a video is played, `WebPlayerView` reports position and duration via JS message handler. This always overwrites any scraped value, so the player is the source of truth once a video has been played. `upsertBrowseVideos` only fills duration when the stored value is 0, so player precision is preserved across refreshes.
 
 ### Models (SwiftData)
 
 - **`Channel`** — `channelID`, `handle`, `displayName`, `continuation` (pagination token), `videos` relationship.
-- **`Video`** — `videoID`, `title`, `publishedAt`, `thumbnailURL`, `isShort`, `watchPercentage` (0–100), `watchedAt`, `lastPosition`, `duration`, `channel` relationship.
+- **`Video`** — `videoID`, `title`, `publishedAt`, `thumbnailURL`, `watchPercentage` (0–100), `watchedAt`, `lastPosition`, `duration`, `channel` relationship.
 
 `Video.watchPercentage` is updated from the player's JS position reports (currentTime/duration). Clicking play does not mark a video as watched — only actual playback progress changes the percentage. Videos with ≥90% are considered "watched", >0% but <90% are "started".
 
-`Video.duration` starts at 0 and is populated either by `ChannelBrowser` scraping or by the player — whichever happens first.
+`Video.duration` is populated from `ChannelBrowser`'s grid scrape at insert time. Live stream VODs whose duration isn't yet known come in at 0 and are filled on a later refresh. The player overwrites whatever is stored when the video plays.
 
 The SwiftData store lives at `~/Library/Containers/com.utv.app/Data/Library/Application Support/default.store` (SQLite).
 

@@ -7,6 +7,7 @@ struct ChannelBrowser {
     struct BrowseResult {
         let videos: [VideoInfo]
         let continuation: String?  // nil = no more pages
+        var channelName: String? = nil  // only populated from fetchFirstPage
     }
 
     /// Fetch the first page of videos from a channel's /videos tab.
@@ -40,7 +41,18 @@ struct ChannelBrowser {
             throw ChannelFeed.FeedError.parseError("ytInitialData is not a dictionary")
         }
 
-        return parseVideoTab(from: root)
+        var result = parseVideoTab(from: root)
+        result.channelName = extractChannelName(from: root)
+        return result
+    }
+
+    private static func extractChannelName(from root: [String: Any]) -> String? {
+        if let meta = root["metadata"] as? [String: Any],
+           let cm = meta["channelMetadataRenderer"] as? [String: Any],
+           let title = cm["title"] as? String, !title.isEmpty {
+            return title
+        }
+        return nil
     }
 
     /// Fetch the next page of videos using a continuation token.
@@ -167,26 +179,9 @@ struct ChannelBrowser {
         return BrowseResult(videos: videos, continuation: nextContinuation)
     }
 
-    /// Parse a single videoRenderer into VideoInfo. Returns nil for Shorts.
+    /// Parse a single videoRenderer into VideoInfo.
     private static func parseVideoRenderer(_ renderer: [String: Any]) -> VideoInfo? {
         guard let videoID = renderer["videoId"] as? String else { return nil }
-
-        // Filter out Shorts — check navigation endpoint and overlay badges
-        if let navEp = renderer["navigationEndpoint"] as? [String: Any],
-           let command = navEp["commandMetadata"] as? [String: Any],
-           let web = command["webCommandMetadata"] as? [String: Any],
-           let url = web["url"] as? String,
-           url.contains("/shorts/") {
-            return nil
-        }
-        if let overlays = renderer["thumbnailOverlays"] as? [[String: Any]] {
-            for overlay in overlays {
-                if let style = overlay["thumbnailOverlayTimeStatusRenderer"] as? [String: Any],
-                   let s = style["style"] as? String, s == "SHORTS" {
-                    return nil
-                }
-            }
-        }
 
         let title: String
         if let titleObj = renderer["title"] as? [String: Any],
