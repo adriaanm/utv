@@ -48,6 +48,7 @@ final class FeedService {
     /// Refresh a channel: rescrape `/videos` first page, refresh durations, and
     /// delete any DB video within that scrape's time window that isn't in the
     /// scrape result — those are shorts / livestreams / unlisted.
+    /// Also fills missing durations from older videos by paginating if needed.
     func refreshChannel(_ channel: Channel) async throws {
         let browseResult = try await ChannelBrowser.fetchFirstPage(channelID: channel.channelID)
         let browseIDs = Set(browseResult.videos.map(\.videoID))
@@ -65,6 +66,11 @@ final class FeedService {
         if let name = browseResult.channelName, !name.isEmpty {
             channel.displayName = name
         }
+
+        // Fill missing durations: paginate through continuation pages if any
+        // existing videos still have duration == 0.
+        try await fillMissingDurations(for: channel, startingWith: browseResult.continuation)
+
         try modelContext.save()
     }
 
@@ -96,6 +102,26 @@ final class FeedService {
         upsertBrowseVideos(result.videos, into: channel)
         channel.continuation = result.continuation ?? ""
         try modelContext.save()
+    }
+
+    /// Paginate through continuation pages to fill duration for videos that have duration == 0.
+    /// Stops as soon as there are no more gaps (or no more pages).
+    private func fillMissingDurations(for channel: Channel, startingWith firstToken: String?) async throws {
+        let missingIDs = Set(channel.videos.filter { $0.duration == 0 }.map(\.videoID))
+        guard !missingIDs.isEmpty else { return }
+
+        var remaining = missingIDs
+        var token = firstToken
+        while let t = token, !t.isEmpty, !remaining.isEmpty {
+            let page = try await ChannelBrowser.fetchNextPage(continuation: t)
+            for info in page.videos where remaining.contains(info.videoID) && info.durationSeconds > 0 {
+                if let video = channel.videos.first(where: { $0.videoID == info.videoID }) {
+                    video.duration = info.durationSeconds
+                }
+                remaining.remove(info.videoID)
+            }
+            token = page.continuation
+        }
     }
 
     private func upsertBrowseVideos(_ infos: [VideoInfo], into channel: Channel) {
