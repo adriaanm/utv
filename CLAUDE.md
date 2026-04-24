@@ -56,12 +56,7 @@ docs/                   Documentation and guides
 
 The UI is a three-column `NavigationSplitView`: sidebar (channel list), content (video list), detail (player).
 
-Two video list views share similar row layouts but are separate structs:
-
-- **`VideoRow`** — used in the per-channel video list (content column). Shows thumbnail, title, relative date, duration, watch progress.
-- **`HomeVideoRow`** — used in `HomeView` with a segmented filter (Unwatched / Started / Watched). Same layout as `VideoRow` but adds the channel handle.
-
-When changing how video metadata is displayed, update both `VideoRow` and `HomeVideoRow`.
+**`VideoListView`** is the shared video list used by both the per-channel view and `HomeView`. It takes a `videos` array, an `allVideos` superset (for "Mark Older as Watched"), an optional `channel` (enables load-more pagination), and a `showChannel` flag. **`VideoRow`** renders each video; when `showChannel` is true it includes the channel handle. `HomeView` is a thin wrapper that owns the `@StoredQuery` and watch-status filter (Unwatched / Started / Watched), passing filtered results into `VideoListView`.
 
 ### Data flow
 

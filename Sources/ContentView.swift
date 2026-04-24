@@ -174,9 +174,16 @@ struct ContentView: View {
                 stopPlaying()
             }
         } else if let selectedChannel {
-            VideoListView(channel: selectedChannel) { video in
-                play(video)
-            }
+            // TODO: with dynamic predicates, VideoListView could own a @StoredQuery
+            // filtered by channel, avoiding the eager sort on every re-render.
+            let sorted = selectedChannel.videos.sorted { $0.publishedAt > $1.publishedAt }
+            VideoListView(
+                videos: sorted,
+                allVideos: sorted,
+                channel: selectedChannel,
+                onPlay: { video in play(video) }
+            )
+            .navigationTitle(selectedChannel.displayName)
         } else {
             HomeView { video in
                 play(video)
@@ -284,24 +291,29 @@ struct ChannelRow: View {
 
 struct VideoListView: View {
     @Environment(\.modelContext) private var modelContext
-    let channel: Channel
+    let videos: [Video]
+    let allVideos: [Video]  // superset for "Mark Older as Watched"
+    var channel: Channel? = nil  // non-nil enables load-more
+    var showChannel: Bool = false
     let onPlay: (Video) -> Void
 
     @State private var isLoadingMore = false
+    @State private var searchText = ""
 
     private var feedService: FeedService {
         FeedService(modelContext: modelContext)
     }
 
-    private var sortedVideos: [Video] {
-        channel.videos.sorted { $0.publishedAt > $1.publishedAt }
+    private var displayedVideos: [Video] {
+        guard !searchText.isEmpty else { return videos }
+        return videos.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
     }
 
     var body: some View {
         List {
-            ForEach(sortedVideos) { video in
+            ForEach(displayedVideos) { video in
                 Button { onPlay(video) } label: {
-                    VideoRow(video: video)
+                    VideoRow(video: video, showChannel: showChannel)
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
@@ -315,7 +327,8 @@ struct VideoListView: View {
                     }
                     Divider()
                     Button("Open in Browser") {
-                        openInBrowser(video)
+                        let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
+                        NSWorkspace.shared.open(url)
                     }
                     if video.lastPosition > 0 {
                         Button("Resume at \(formatTime(video.lastPosition))") {
@@ -328,14 +341,14 @@ struct VideoListView: View {
                         video.watchedAt = .now
                     }
                     Button("Mark Older as Watched") {
-                        for v in channel.videos where v.publishedAt <= video.publishedAt && v.watchPercentage < 100 {
+                        for v in allVideos where v.publishedAt <= video.publishedAt && v.watchPercentage < 100 {
                             v.watchPercentage = 100
                             v.watchedAt = .now
                         }
                     }
                 }
                 .onAppear {
-                    if video.videoID == sortedVideos.last?.videoID {
+                    if channel != nil, video.videoID == displayedVideos.last?.videoID {
                         loadMore()
                     }
                 }
@@ -350,16 +363,11 @@ struct VideoListView: View {
                 }
             }
         }
-        .navigationTitle(channel.displayName)
-    }
-
-    private func openInBrowser(_ video: Video) {
-        let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
-        NSWorkspace.shared.open(url)
+        .searchable(text: $searchText, prompt: "Filter videos")
     }
 
     private func loadMore() {
-        guard !isLoadingMore, channel.hasMoreVideos else { return }
+        guard let channel, !isLoadingMore, channel.hasMoreVideos else { return }
         isLoadingMore = true
         Task {
             try? await feedService.loadMoreVideos(for: channel)
@@ -370,10 +378,10 @@ struct VideoListView: View {
 
 struct VideoRow: View {
     let video: Video
+    var showChannel: Bool = false
 
     var body: some View {
         HStack(spacing: 12) {
-            // Thumbnail
             if let urlString = video.thumbnailURL, let url = URL(string: urlString) {
                 AsyncImage(url: url) { image in
                     image.resizable().aspectRatio(16/9, contentMode: .fit)
@@ -390,6 +398,10 @@ struct VideoRow: View {
                     .lineLimit(2)
 
                 HStack(spacing: 8) {
+                    if showChannel, let channel = video.channel {
+                        Text(channel.handle)
+                            .foregroundStyle(.blue)
+                    }
                     Text(video.publishedAt, style: .relative)
                     if video.duration > 0 {
                         Text("·")
@@ -403,7 +415,6 @@ struct VideoRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-                // Progress bar for partially watched
                 if video.lastPosition > 0 && video.duration > 0 {
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
@@ -439,6 +450,9 @@ enum VideoFilter: String, CaseIterable {
 }
 
 struct HomeView: View {
+    // TODO: fetches all videos into memory, then filters by watch status in Swift.
+    // With dynamic predicate support in @StoredQuery, push the watch-status filter
+    // into the query so SwiftData only materializes the matching subset.
     @StoredQuery(
         sort: \Video.publishedAt,
         order: .reverse
@@ -482,45 +496,12 @@ struct HomeView: View {
                     )
                 }
             } else {
-                List {
-                    ForEach(filteredVideos) { video in
-                        Button { onPlay(video) } label: {
-                            HomeVideoRow(video: video)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("Copy") {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(video.title, forType: .string)
-                            }
-                            Button("Copy Link") {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString("https://www.youtube.com/watch?v=\(video.videoID)", forType: .string)
-                            }
-                            Divider()
-                            Button("Open in Browser") {
-                                let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
-                                NSWorkspace.shared.open(url)
-                            }
-                            if video.lastPosition > 0 {
-                                Button("Resume at \(formatTime(video.lastPosition))") {
-                                    onPlay(video)
-                                }
-                            }
-                            Divider()
-                            Button("Mark as Watched") {
-                                video.watchPercentage = 100
-                                video.watchedAt = .now
-                            }
-                            Button("Mark Older as Watched") {
-                                for v in allVideos where v.publishedAt <= video.publishedAt && v.watchPercentage < 100 {
-                                    v.watchPercentage = 100
-                                    v.watchedAt = .now
-                                }
-                            }
-                        }
-                    }
-                }
+                VideoListView(
+                    videos: filteredVideos,
+                    allVideos: allVideos,
+                    showChannel: true,
+                    onPlay: onPlay
+                )
             }
         }
         .navigationTitle("Home")
@@ -535,64 +516,6 @@ struct HomeView: View {
                 .frame(width: 260)
             }
         }
-    }
-}
-
-struct HomeVideoRow: View {
-    let video: Video
-
-    var body: some View {
-        HStack(spacing: 12) {
-            if let urlString = video.thumbnailURL, let url = URL(string: urlString) {
-                AsyncImage(url: url) { image in
-                    image.resizable().aspectRatio(16/9, contentMode: .fit)
-                } placeholder: {
-                    Rectangle().fill(.quaternary).aspectRatio(16/9, contentMode: .fit)
-                }
-                .frame(width: 160)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(video.title)
-                    .fontWeight(video.watchPercentage > 0 ? .regular : .semibold)
-                    .lineLimit(2)
-
-                HStack(spacing: 8) {
-                    if let channel = video.channel {
-                        Text(channel.handle)
-                            .foregroundStyle(.blue)
-                    }
-                    Text(video.publishedAt, style: .relative)
-                    if video.duration > 0 {
-                        Text("·")
-                        if video.lastPosition > 0 {
-                            Text("\(formatTime(video.lastPosition)) / \(formatTime(video.duration))")
-                        } else {
-                            Text(formatTime(video.duration))
-                        }
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-                if video.lastPosition > 0 && video.duration > 0 {
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Rectangle().fill(.quaternary)
-                            Rectangle()
-                                .fill(.blue)
-                                .frame(width: geo.size.width * min(video.lastPosition / video.duration, 1.0))
-                        }
-                    }
-                    .frame(height: 3)
-                    .clipShape(Capsule())
-                }
-            }
-
-            Spacer()
-        }
-        .padding(.vertical, 4)
     }
 }
 
