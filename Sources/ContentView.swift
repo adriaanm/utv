@@ -131,6 +131,15 @@ struct ContentView: View {
                         ChannelRow(channel: channel)
                     }
                     .contextMenu {
+                        Button("Copy") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(channel.displayName, forType: .string)
+                        }
+                        Button("Copy Link") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString("https://www.youtube.com/\(channel.handle)", forType: .string)
+                        }
+                        Divider()
                         Button("Mark All as Watched") {
                             markAllWatched(channel)
                         }
@@ -296,6 +305,15 @@ struct VideoListView: View {
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
+                    Button("Copy") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(video.title, forType: .string)
+                    }
+                    Button("Copy Link") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString("https://www.youtube.com/watch?v=\(video.videoID)", forType: .string)
+                    }
+                    Divider()
                     Button("Open in Browser") {
                         openInBrowser(video)
                     }
@@ -460,6 +478,15 @@ struct HomeView: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
+                            Button("Copy") {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(video.title, forType: .string)
+                            }
+                            Button("Copy Link") {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString("https://www.youtube.com/watch?v=\(video.videoID)", forType: .string)
+                            }
+                            Divider()
                             Button("Open in Browser") {
                                 let url = URL(string: "https://www.youtube.com/watch?v=\(video.videoID)")!
                                 NSWorkspace.shared.open(url)
