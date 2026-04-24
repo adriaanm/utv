@@ -6,7 +6,7 @@ Personal-use macOS YouTube viewer app using WKWebView + content blocking, backed
 
 ## Working principles
 
-- **Commit often.** Small, atomic commits. Don't batch unrelated changes. Commit after each meaningful step, not at the end of a session.
+- **Commit each logical change separately.** One commit per behavior change — don't batch unrelated changes. If a session produces a bug fix and a new feature, that's two commits. Commit after each meaningful step, not at the end of a session.
 - **Context is limited, the repo is forever.** Anything that might be needed in a future session belongs in the repo, not in conversation memory. Use `docs/` as a journal and work planner — write plans before starting, update as you go.
 - **When a task is done, rework its doc into a guide.** Task-tracking docs in `docs/` should evolve from "what we're doing" into "how this works" once complete.
 - **Automate repetitive tasks with a justfile.** Add `just` recipes for anything done more than twice (syncing, building, testing, etc.).
