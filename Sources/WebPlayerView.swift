@@ -26,6 +26,18 @@ extension WebPlayerView {
         config.userContentController.add(context.coordinator, name: "utvPosition")
         config.userContentController.add(context.coordinator, name: "utvFullscreen")
 
+        // Disable autoplay-next: set YouTube's preference before page loads
+        let disableAutoplay = WKUserScript(source: """
+            (function() {
+                try {
+                    const val = JSON.stringify({"autoplay": false});
+                    localStorage.setItem('yt-player-autoplay', val);
+                    localStorage.setItem('yt.autonav::advancement_mode', '0');
+                } catch(e) {}
+            })();
+            """, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page)
+        config.userContentController.addUserScript(disableAutoplay)
+
         // Override fullscreen API at document start, before YouTube captures references.
         let fsOverride = WKUserScript(source: """
             (function() {
@@ -117,6 +129,7 @@ extension WebPlayerView {
         // MARK: - WKNavigationDelegate
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            disableAutoplayNext(webView)
             if maximized {
                 injectMaximizeCSS(webView)
                 injectPositionTracker(webView)
@@ -146,6 +159,25 @@ extension WebPlayerView {
         }
 
         // MARK: - JS Injection
+
+        private func disableAutoplayNext(_ webView: WKWebView) {
+            let js = """
+            (function() {
+                function tryDisable(attempts) {
+                    if (attempts <= 0) return;
+                    // Click the autoplay toggle if it's on
+                    const toggle = document.querySelector('.ytp-autonav-toggle-button');
+                    if (toggle && toggle.getAttribute('aria-checked') === 'true') {
+                        toggle.click();
+                        return;
+                    }
+                    setTimeout(() => tryDisable(attempts - 1), 1000);
+                }
+                tryDisable(10);
+            })();
+            """
+            webView.evaluateJavaScript(js)
+        }
 
         private func seekTo(_ seconds: Double, in webView: WKWebView) {
             let js = """
