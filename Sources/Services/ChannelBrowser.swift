@@ -203,16 +203,9 @@ struct ChannelBrowser {
             publishedAt = .now
         }
 
-        // Thumbnail
-        let thumbnailURL: String?
-        if let thumbObj = renderer["thumbnail"] as? [String: Any],
-           let thumbnails = thumbObj["thumbnails"] as? [[String: Any]],
-           let best = thumbnails.last,
-           let url = best["url"] as? String {
-            thumbnailURL = url
-        } else {
-            thumbnailURL = nil
-        }
+        // Thumbnail — use canonical URL; scraped URLs have signed params that expire
+        // and non-standard filenames (hqdefault_custom_1.jpg) that don't load reliably
+        let thumbnailURL = "https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg"
 
         // Duration — from lengthText overlay or inline
         var durationSeconds: Double = 0
