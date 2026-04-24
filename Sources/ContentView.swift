@@ -322,6 +322,17 @@ struct VideoListView: View {
                             onPlay(video)
                         }
                     }
+                    Divider()
+                    Button("Mark as Watched") {
+                        video.watchPercentage = 100
+                        video.watchedAt = .now
+                    }
+                    Button("Mark Older as Watched") {
+                        for v in channel.videos where v.publishedAt <= video.publishedAt && v.watchPercentage < 100 {
+                            v.watchPercentage = 100
+                            v.watchedAt = .now
+                        }
+                    }
                 }
                 .onAppear {
                     if video.videoID == sortedVideos.last?.videoID {
@@ -494,6 +505,17 @@ struct HomeView: View {
                             if video.lastPosition > 0 {
                                 Button("Resume at \(formatTime(video.lastPosition))") {
                                     onPlay(video)
+                                }
+                            }
+                            Divider()
+                            Button("Mark as Watched") {
+                                video.watchPercentage = 100
+                                video.watchedAt = .now
+                            }
+                            Button("Mark Older as Watched") {
+                                for v in allVideos where v.publishedAt <= video.publishedAt && v.watchPercentage < 100 {
+                                    v.watchPercentage = 100
+                                    v.watchedAt = .now
                                 }
                             }
                         }
