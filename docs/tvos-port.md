@@ -1,6 +1,6 @@
 # tvOS Port Plan
 
-Status: **in progress.** App launches on Apple TV; ad-blocker + UI smoke test pending. Progress checklist at the bottom.
+Status: **in progress.** App launches on Apple TV; ad blocker (all three layers — content rules + scriptlet bundle + CSS hiding) and YouTube watch-page navigation are green on hardware. Visual playback verification + d-pad navigation still pending. Progress checklist at the bottom.
 
 ## Goal
 
@@ -169,7 +169,8 @@ This doc rewrites itself: "Strategy" becomes "How the bridge works", "Risks" bec
 - [x] **App launches on Apple TV** — clean dyld load. Took routing every WebKit class construction through a C bridge in `UtvWebKitTV.m` (see "Caveat: dyld eagerly binds class refs" above). AdBlocker scriptlet injection succeeds; WebKit's filesystem-permission warnings on launch are non-fatal sandbox noise.
 - [x] **`WKContentRuleListStore` bridged on tvOS** — `UtvWebKitCompileContentRuleList` resolves the store + compile method via `NSClassFromString` + `objc_msgSend`, and pipes the resulting `WKContentRuleList` into `addContentRuleList:` without exposing either WebKit type to Swift. Restores the WebKit-native content-blocker layer (uBO filter list → JSON rules) so tvOS gets the same three-layer ad-block stack as macOS. tvOS routes the store at a custom URL inside `Library/Caches/ContentRuleListStore` rather than `+defaultStore` — the default path lives under `~/Library/WebKit/`, which the tvOS sandbox refuses to create (you'll see `Operation not permitted` for `WebsiteData/MediaKeys`, `IndexedDB`, etc. at WKWebView init), causing the compile to fail with `WKErrorDomain code 6 (WKErrorContentRuleListStoreCompileFailed)`. macOS keeps `+defaultStore`.
 - [x] **Consent-cookie gate on tvOS `ContentView`** — Siri Remote can't click YouTube's GDPR consent banner inside a WKWebView (no DOM focus engine bridge), so on tvOS we never show the banner: `ContentView` waits for the Mac → TV sync to deliver the SOCS cookie (see [docs/sync-design.md](sync-design.md)) before mounting `WebPlayerView`. If the Mac isn't reachable, an actionable retry view fronts the WebView. Cached cookies from prior sessions are re-injected before mount via `ConsentManager.ensureConsent()`.
-- [ ] First sideload to Apple TV — verify ad blocking + playback
+- [x] **First sideload to Apple TV** — `[WebPlayer] didFinish https://www.youtube.com/watch?v=…` confirms the YouTube watch page reaches navigation completion on hardware after Mac→TV cookie sync. AdBlocker logs all three layers as installed (`Scriptlet bundle injected (573 397 bytes)` + `Content rules compiled and loaded (tvOS bridge)` + the always-on CSS hide script). Visual playback verification is still a remote-needs-eyes step but the data path is clean.
+- [ ] Visual playback confirmation — eyes on the TV; verify the video actually plays without ads showing through, and survives the inevitable YouTube SPA reflow.
 - [ ] Restore tvOS app icon — currently empty (see "Asset catalog" below)
 - [ ] **d-pad navigation inside the WKWebView** — Siri Remote presses → DOM focus + synthetic clicks. Prerequisite for any HTML-driven UI on tvOS, including the focus-driven channel browser. Picks up after first sideload validates cookie sync + playback. Full design + edge cases in [docs/tvos-dpad-navigation.md](tvos-dpad-navigation.md).
 - [ ] Focus-driven `ContentView` for tvOS — channel list, video list, player. Blocked on the d-pad bridge above; the shape of the UI (HTML inside WebView vs. native SwiftUI alongside it) depends on how tractable the JS focus shim turns out to be.
