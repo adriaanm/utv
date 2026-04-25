@@ -1,9 +1,12 @@
 import SwiftUI
 import SwiftData
 
-@main
-struct utvApp: App {
-    var body: some Scene {
+// Root scene shared by the macOS executable and the tvOS Xcode target.
+// Both entry points are thin @main wrappers that instantiate AppRoot().
+public struct AppRoot: Scene {
+    public init() {}
+
+    public var body: some Scene {
         WindowGroup {
             ContentView()
         }

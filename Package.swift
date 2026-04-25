@@ -9,23 +9,29 @@ let package = Package(
         .macOS(.v14),
         .tvOS(.v17),
     ],
+    products: [
+        // Library products consumed by both the macOS executable (below) and the
+        // tvOS Xcode app target (see tvos/project.yml — XcodeGen-generated).
+        .library(name: "utvCore", targets: ["utvCore"]),
+        .library(name: "UtvWebKitTV", targets: ["UtvWebKitTV"]),
+    ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "602.0.0"),
     ],
     targets: [
         .executableTarget(
             name: "utv",
+            dependencies: ["utvCore"],
+            path: "Sources/utv"
+        ),
+        .target(
+            name: "utvCore",
             dependencies: [
                 "UtvMacros",
                 "UtvWebKitTV",
                 .target(name: "VendoredWebKit", condition: .when(platforms: [.tvOS])),
             ],
-            path: "Sources",
-            exclude: [
-                "utv.entitlements",
-                "UtvWebKitTV",
-                "VendoredWebKit",
-            ],
+            path: "Sources/utvCore",
             resources: [
                 .process("Resources"),
             ]
