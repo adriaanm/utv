@@ -136,6 +136,16 @@ Bundles are JSON via `JSONEncoder/Decoder` with ISO-8601 dates. No protobuf, no 
 3. **Schema migrations across versions** — `schemaVersion: 1` for now. If the schema changes, refuse to sync with mismatching versions until both sides updated.
 4. **Authentication** — none. Personal-use, home LAN. If we ever ship publicly, MCSession peers can be required to share a PSK (`MCEncryptionRequired` is already on by default).
 
+## Troubleshooting
+
+If both sides report a connectivity error despite being on the same LAN:
+
+1. **Stale Mac install.** Check `codesign -d --entitlements - /Applications/utv.app` and `plutil -p /Applications/utv.app/Contents/Info.plist`. The bundle must contain both `com.apple.security.network.server` (entitlements) and `NSLocalNetworkUsageDescription` + `NSBonjourServices` listing `_utv-sync._tcp` / `_utv-sync._udp` (Info.plist). Bundles built before the sync work landed have neither — `just install` regenerates both.
+2. **macOS local-network permission.** First launch after install pops a dialog ("utv would like to find devices on your local network"). If it never appeared, or you clicked Don't Allow, toggle **System Settings → Privacy & Security → Local Network → utv** on. Without this, `MCNearbyServiceAdvertiser` silently fails — `[Sync] Advertiser failed to start: …` lands in Console.app.
+3. **tvOS local-network permission.** Same prompt on the device the first time. Accept it. If the prompt was missed, **Settings → Apps → utv** on the Apple TV exposes the toggle.
+4. **AP isolation.** Some routers block mDNS between Wi-Fi clients (especially across 2.4 / 5 / 6 GHz radios or "guest" SSIDs). Verify both devices are on the same SSID and that client-isolation is off.
+5. **Symptoms.** When the Mac isn't advertising, the TV's `runTVStartupPull` times out with `SyncProtocolError.timeout` — that's the "connectivity error" the TV surfaces. Always check the Mac side first; the TV side is mostly downstream noise from a missing advertiser.
+
 ## Validation status
 
 - `swift build` (macOS) passes.

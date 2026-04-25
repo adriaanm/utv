@@ -100,9 +100,11 @@ extension SyncAdvertiser: MCNearbyServiceAdvertiserDelegate {
         _ advertiser: MCNearbyServiceAdvertiser,
         didNotStartAdvertisingPeer error: Error
     ) {
-        Task { @MainActor in
-            print("SyncAdvertiser failed: \(error)")
-        }
+        // NSLog so the message reaches Console.app / `just launch-tv-console`.
+        // The most common cause is the bundle missing NSLocalNetworkUsageDescription
+        // / NSBonjourServices in Info.plist, or the user denying the local-network
+        // permission prompt — see docs/sync-design.md.
+        NSLog("[Sync] Advertiser failed to start: %@", error.localizedDescription)
     }
 }
 
