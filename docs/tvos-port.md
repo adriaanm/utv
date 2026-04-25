@@ -49,27 +49,36 @@ Gitignored. Re-run after every Xcode update. Owned by the `VendoredWebKit` targe
 
 ## Module layout
 
+SwiftPM cross-compiles a tvOS Mach-O cleanly but produces no `.app` bundle. The tvOS app target is therefore an Xcode project, generated from `tvos/project.yml` by XcodeGen, that consumes the SwiftPM package as a local dependency. The shared SwiftUI Scene was extracted into a `utvCore` library so it can be reused by both the macOS executable and the tvOS Xcode target.
+
 ```
+Package.swift                  # macOS exe (utv) + utvCore library + UtvWebKitTV bridge
 Sources/
-  UtvWebKitTV/                   # ObjC bridge target. tvOS-only logic; no-op on macOS.
-    include/
-      UtvWebKitTV.h              # bootstrap + smoke test + private prefs setter
-      module.modulemap           # exposes UtvWebKitTV module to Swift
-    UtvWebKitTV.m                # dlopen + respondsToSelector smoke check + _setMediaSourceEnabled: etc.
-  VendoredWebKit/                # tvOS-only. Owns vendored iOS-SDK WebKit headers + `module WebKit` shim.
-    include/
-      module.modulemap           # `module WebKit { umbrella header "WebKit/WebKit.h" ... }`
-      WebKit/                    # gitignored, populated by `just sync-webkit-headers`
-        WKWebView.h
-        WKWebViewConfiguration.h
-        ...
-    VendoredWebKit.m             # placeholder so SwiftPM treats the target as buildable
-  WebPlayerView.swift            # Coordinator logic stays here, shared across platforms
-  WebPlayerView+macOS.swift      # NSViewRepresentable using system WKWebView directly
-  WebPlayerView+tvOS.swift       # UIViewRepresentable using WKWebView via vendored module
-  ContentView.swift              # macOS — unchanged
-  ContentView+tvOS.swift         # Focus-driven list view, no NavigationSplitView
+  utv/utvApp.swift             # macOS @main wrapper (12 lines) — instantiates AppRoot
+  utvCore/                     # all SwiftUI views, models, services, ad-block, scriptlets
+    AppRoot.swift              # WindowGroup + macOS commands; the shared Scene
+    ContentView.swift          # macOS body (#if os(macOS)) + tvOS placeholder
+    WebPlayerView.swift        # Coordinator + NSViewRepresentable (macOS) /
+                               # UIViewRepresentable (tvOS) — JS-injection logic shared
+    AdBlocker.swift, ConsentManager.swift, ChannelFeed.swift, …
+    Models/, Services/, Resources/
+  UtvWebKitTV/                 # ObjC bridge: dlopen + private prefs category. No-op on macOS.
+    include/UtvWebKitTV.h, module.modulemap
+    UtvWebKitTV.m
+  VendoredWebKit/              # tvOS-only. Owns vendored iOS-SDK WebKit headers + `module WebKit` shim.
+    include/module.modulemap, WebKit/   # WebKit/ is gitignored; sync via just sync-webkit-headers
+    VendoredWebKit.m
+
+tvos/                          # XcodeGen-driven tvOS app target
+  project.yml                  # consumes utv package -> utvCore + UtvWebKitTV products
+  utv-tv/
+    App.swift                  # @main wrapper — calls UtvWebKitBootstrap() then renders AppRoot
+    Info.plist
+    Assets.xcassets/           # empty for now (see "Asset catalog" below)
+  utv-tv.xcodeproj/            # gitignored; regenerate with `just gen-tv`
 ```
+
+**Why XcodeGen and not pure SwiftPM?** SwiftPM `xcodebuild -scheme utv` doesn't produce an `.app` bundle for executable products on tvOS — it links the binary but skips bundling/Info.plist/asset compilation/code signing. An Xcode project target does all of that. XcodeGen lets us keep `tvos/project.yml` (small, hand-written, in-tree) without checking the generated `.xcodeproj` into git.
 
 **Revised approach (narrower than the original sketch):** no monolithic `UtvWebView` wrapper class. WebKit's surface used by `WebPlayerView` and `AdBlocker` is extensive (`WKWebView`, `WKWebViewConfiguration`, `WKUserContentController`, `WKContentRuleListStore`, `WKUserScript`, `WKContentWorld`, `WKNavigationDelegate`, `WKScriptMessageHandler`, `WKNavigationAction`, …); wrapping all of it in ObjC for both platforms would be a lot of duplicate code on macOS for no value.
 
@@ -102,19 +111,20 @@ Surfaces a clean error if Apple reshuffles WebKit's API in a future tvOS release
 
 ## Build & deploy
 
-New justfile recipes:
-
 ```
-just sync-webkit-headers   # vendor headers from iOS SDK (this PR)
-just build-tv              # swift build for tvOS
-just bundle-tv             # assemble .app for tvOS
-just deploy-tv             # install to paired Apple TV
+just sync-webkit-headers   # vendor headers from iOS SDK (re-run after Xcode updates)
+just build-tv              # SwiftPM cross-compile (no .app — just verifies the package compiles for tvOS)
+just gen-tv                # regenerate tvos/utv-tv.xcodeproj from project.yml (XcodeGen)
+just bundle-tv             # xcodebuild Release .app — unsigned, useful for inspecting the bundle
+just deploy-tv             # build signed + sideload to the single paired Apple TV
 ```
 
-Sideload requirements (document in README):
-1. Apple Developer account (free tier OK for personal sideload — provisioning expires every 7 days)
-2. Apple TV in developer mode, paired in Xcode
-3. Re-deploy weekly (free-tier provisioning expiry — drives the cadence at which we accept SDK header drift risk)
+`scripts/deploy-tv.sh` auto-detects the paired TV (`xcrun devicectl list devices --json-output`, filtering for `deviceType=appleTV` + `pairingState=paired` and extracting the xcodebuild-style 8-16-hex UDID from `potentialHostnames`) and the signing team (`defaults read com.apple.dt.Xcode IDEProvisioningTeamByIdentifier`). Override either with `DEVELOPMENT_TEAM=XXXXXXXXXX scripts/deploy-tv.sh`.
+
+Sideload requirements:
+1. Apple Developer account (free tier OK — provisioning expires every 7 days)
+2. Apple TV paired in Xcode (Cmd-Shift-2 → Devices and Simulators)
+3. Re-deploy weekly when the provisioning profile expires
 
 ## Risks / things to verify before committing to the port
 
@@ -147,8 +157,11 @@ This doc rewrites itself: "Strategy" becomes "How the bridge works", "Risks" bec
 - [x] `ContentView` macOS body wrapped in `#if os(macOS)`; minimal tvOS placeholder `ContentView` loads a hardcoded `WebPlayerView` for first-sideload smoke test.
 - [x] `utvApp` `.commands` and `.defaultSize` scoped to macOS.
 - [x] **Whole-package tvOS build green** — `swift build --triple arm64-apple-tvos17.0` links a tvOS executable. Two non-fatal warnings: `using sysroot for 'MacOSX' but targeting 'AppleTV'` (clang on the C target) and `-undefined dynamic_lookup is deprecated on tvOS` (linker — still works).
-- [ ] Bundle + deploy scripts (`just bundle-tv`, `just deploy-tv`) — Info.plist, code signing, ipa packaging, install to paired Apple TV
+- [x] **Library/executable refactor** — split SwiftPM target into `utvCore` library + thin `utv` executable. `AppRoot` extracts the SwiftUI Scene so the tvOS Xcode target reuses it.
+- [x] **XcodeGen scaffold** — `tvos/project.yml` generates `utv-tv.xcodeproj` (gitignored) consuming the SwiftPM package's `utvCore` + `UtvWebKitTV` library products.
+- [x] **`just bundle-tv` + `just deploy-tv`** — `xcodebuild` produces a Release `.app`; `scripts/deploy-tv.sh` builds signed and installs to the single paired Apple TV via `xcrun devicectl device install app`.
 - [ ] First sideload to Apple TV — verify ad blocking + playback + Siri Remote
+- [ ] Restore tvOS app icon — currently empty (see "Asset catalog" below)
 - [ ] Focus-driven `ContentView` for tvOS — channel list, video list, player. Design after first hardware smoke test confirms WKWebView playback works.
 
 ### Cross-compile invocation
@@ -177,6 +190,17 @@ A `module WebKit` declaration inside `UtvWebKitTV/include/` would conflict with 
 `UtvWebKitTV` (the ObjC bridge) also depends on `VendoredWebKit` on tvOS via `headerSearchPath("../VendoredWebKit/include")`, so its `#import "WebKit/WKWebView.h"` etc. find the same single-source-of-truth header copy.
 
 `just sync-webkit-headers` writes the headers into `VendoredWebKit/include/WebKit/`. The modulemap and bridge target both reference that location.
+
+### Asset catalog
+
+The tvOS asset catalog at `tvos/utv-tv/Assets.xcassets` ships **empty** — no `App Icon & Top Shelf Image.brandassets`. tvOS layered (parallax) icons require `actool` to spawn an Interface Builder simulator device for parallax preview rendering, and on this machine `~/Library/Developer` is symlinked to an external SSD that `CoreSimulatorService` can't write to (TCC restricts daemon writes to external volumes — `Operation not permitted` when creating `<UUID>/data/Library/Caches`). The build previously failed at:
+
+```
+Failed to find a suitable device for the type IBAppleTVSimDeviceType1080p ...
+Device was allocated but was stuck in creation state.
+```
+
+For now the app sideloads with the default tvOS icon. To restore: regenerate the `.brandassets` from `AppIcon.iconset/` and either grant Full Disk Access to `CoreSimulatorService` for the external volume, or move `~/Library/Developer` back onto the internal disk.
 
 ### Header patching
 
