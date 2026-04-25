@@ -46,6 +46,32 @@ build-tv: _ensure-resources
     sdk=$(xcrun --sdk appletvos --show-sdk-path)
     swift build --triple arm64-apple-tvos17.0 --sdk "$sdk"
 
+# Regenerate tvos/utv-tv.xcodeproj from project.yml (XcodeGen).
+gen-tv:
+    cd tvos && xcodegen generate
+
+# Build a Release tvOS .app via xcodebuild + XcodeGen project.
+bundle-tv: _ensure-resources gen-tv
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -d Sources/VendoredWebKit/include/WebKit ]; then
+        echo "Vendored WebKit headers missing — run 'just sync-webkit-headers' first." >&2
+        exit 1
+    fi
+    xcodebuild \
+        -project tvos/utv-tv.xcodeproj \
+        -scheme utv-tv \
+        -configuration Release \
+        -sdk appletvos \
+        -destination 'generic/platform=tvOS' \
+        -derivedDataPath .build/tvos-dd \
+        CODE_SIGNING_ALLOWED=NO \
+        build
+
+# Build, sign, and sideload utv to the single paired Apple TV.
+deploy-tv: _ensure-resources gen-tv
+    ./scripts/deploy-tv.sh
+
 # Build and assemble + launch .app bundle
 run: build
     ./scripts/bundle-app.sh
