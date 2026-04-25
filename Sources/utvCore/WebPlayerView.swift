@@ -158,6 +158,7 @@ extension WebPlayerView {
         // MARK: - WKNavigationDelegate
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            NSLog("[WebPlayer] didFinish %@", webView.url?.absoluteString ?? "(nil)")
             disableAutoplayNext(webView)
             if maximized {
                 injectMaximizeCSS(webView)
@@ -166,6 +167,23 @@ extension WebPlayerView {
                     seekTo(startAt, in: webView)
                 }
             }
+        }
+
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            let ns = error as NSError
+            NSLog("[WebPlayer] didFail %@: %@ (domain=%@ code=%ld)",
+                  webView.url?.absoluteString ?? "(nil)", error.localizedDescription, ns.domain, ns.code)
+        }
+
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            let ns = error as NSError
+            NSLog("[WebPlayer] didFailProvisional %@: %@ (domain=%@ code=%ld)",
+                  webView.url?.absoluteString ?? "(nil)", error.localizedDescription, ns.domain, ns.code)
+        }
+
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            NSLog("[WebPlayer] WebContent process terminated; reloading %@", webView.url?.absoluteString ?? "(nil)")
+            webView.reload()
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
