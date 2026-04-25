@@ -1,6 +1,28 @@
 import Foundation
 import WebKit
 import SwiftUI
+import UtvWebKitTV
+
+// On tvOS, WebKit class symbols aren't resolvable at launch (see UtvWebKitTV);
+// route every class-method / constructor call through the bridge so dyld
+// doesn't eagerly bind `_OBJC_CLASS_$_WKWebsiteDataStore` etc.
+@inline(__always)
+private func defaultDataStore() -> WKWebsiteDataStore {
+    #if os(tvOS)
+    return UtvWebKitDefaultDataStore()!
+    #else
+    return WKWebsiteDataStore.default()
+    #endif
+}
+
+@inline(__always)
+private func allWebsiteDataTypes() -> Set<String> {
+    #if os(tvOS)
+    return UtvWebKitAllWebsiteDataTypes() as? Set<String> ?? []
+    #else
+    return WKWebsiteDataStore.allWebsiteDataTypes()
+    #endif
+}
 
 /// Identifies a consent sheet presentation. Using an `Identifiable` item
 /// instead of a plain `Bool` ensures SwiftUI always presents a fresh sheet.
@@ -83,7 +105,7 @@ final class ConsentManager {
     /// Try to dismiss the consent sheet. If the SOCS cookie hasn't been set yet,
     /// show a warning instead.
     func finishConsent() async {
-        let store = WKWebsiteDataStore.default().httpCookieStore
+        let store = defaultDataStore().httpCookieStore
         let cookies = await store.allCookies()
         if let socs = cookies.first(where: { $0.name == "SOCS" && $0.domain.contains("youtube") }) {
             socsCookieValue = socs.value
@@ -96,8 +118,8 @@ final class ConsentManager {
     /// Clear stored consent and all WKWebView data (for testing / re-consent).
     func clearAllCookies() async {
         socsCookieValue = nil
-        let store = WKWebsiteDataStore.default()
-        let records = await store.dataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes())
+        let store = defaultDataStore()
+        let records = await store.dataRecords(ofTypes: allWebsiteDataTypes())
         for record in records {
             await store.removeData(ofTypes: record.dataTypes, for: [record])
         }
@@ -115,12 +137,12 @@ final class ConsentManager {
             }
         }
         cookieObserver = observer
-        WKWebsiteDataStore.default().httpCookieStore.add(observer)
+        defaultDataStore().httpCookieStore.add(observer)
     }
 
     private func stopObservingCookies() {
         if let observer = cookieObserver {
-            WKWebsiteDataStore.default().httpCookieStore.remove(observer)
+            defaultDataStore().httpCookieStore.remove(observer)
             cookieObserver = nil
         }
     }
@@ -136,7 +158,7 @@ final class ConsentManager {
             .secure: "TRUE",
             .expires: Date.distantFuture,
         ]) else { return }
-        await WKWebsiteDataStore.default().httpCookieStore.setCookie(cookie)
+        await defaultDataStore().httpCookieStore.setCookie(cookie)
     }
 }
 
@@ -178,8 +200,13 @@ struct ConsentWebView: UIViewRepresentable {
 
 extension ConsentWebView {
     func makeConsentWebView() -> WKWebView {
+        #if os(tvOS)
+        let config = UtvWebKitMakeConfiguration()!
+        let wv = UtvWebKitMakeWebView(.zero, config)!
+        #else
         let config = WKWebViewConfiguration()
         let wv = WKWebView(frame: .zero, configuration: config)
+        #endif
         let url: URL
         let q = (searchQuery ?? "@martijndoolaard")
             .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "@martijndoolaard"

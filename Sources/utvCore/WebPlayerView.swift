@@ -32,7 +32,11 @@ extension WebPlayerView {
     func makeWebView(context: Context) -> WKWebView {
         _ = UtvWebKitBootstrap()
 
+        #if os(tvOS)
+        let config = UtvWebKitMakeConfiguration()!
+        #else
         let config = WKWebViewConfiguration()
+        #endif
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
         config.mediaTypesRequiringUserActionForPlayback = []
         UtvWebKitEnableYouTubeMediaPrefs(config)
@@ -44,7 +48,7 @@ extension WebPlayerView {
         config.userContentController.add(context.coordinator, name: "utvFullscreen")
 
         // Disable autoplay-next: set YouTube's preference before page loads
-        let disableAutoplay = WKUserScript(source: """
+        if let disableAutoplay = makePageUserScript(source: """
             (function() {
                 try {
                     const val = JSON.stringify({"autoplay": false});
@@ -52,11 +56,12 @@ extension WebPlayerView {
                     localStorage.setItem('yt.autonav::advancement_mode', '0');
                 } catch(e) {}
             })();
-            """, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page)
-        config.userContentController.addUserScript(disableAutoplay)
+            """, injectionTime: .atDocumentStart, forMainFrameOnly: true) {
+            config.userContentController.addUserScript(disableAutoplay)
+        }
 
         // Override fullscreen API at document start, before YouTube captures references.
-        let fsOverride = WKUserScript(source: """
+        if let fsOverride = makePageUserScript(source: """
             (function() {
                 const toggle = function() {
                     window.webkit.messageHandlers.utvFullscreen.postMessage('toggle');
@@ -75,10 +80,15 @@ extension WebPlayerView {
                 Document.prototype.webkitExitFullscreen = toggle;
                 Document.prototype.webkitCancelFullScreen = toggle;
             })();
-            """, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page)
-        config.userContentController.addUserScript(fsOverride)
+            """, injectionTime: .atDocumentStart, forMainFrameOnly: false) {
+            config.userContentController.addUserScript(fsOverride)
+        }
 
+        #if os(tvOS)
+        let webView = UtvWebKitMakeWebView(.zero, config)!
+        #else
         let webView = WKWebView(frame: .zero, configuration: config)
+        #endif
         webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 
         context.coordinator.webView = webView

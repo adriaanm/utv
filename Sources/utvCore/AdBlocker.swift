@@ -1,4 +1,22 @@
 import WebKit
+import UtvWebKitTV
+
+// On tvOS WebKit isn't link-time linked, so any static Swift class ref
+// (e.g. `WKUserScript(...)` or `WKContentWorld.page`) makes dyld kill the
+// process at launch. Construct via the UtvWebKitTV bridge instead, which
+// resolves the class at runtime through NSClassFromString.
+@inline(__always)
+func makePageUserScript(
+    source: String,
+    injectionTime: WKUserScriptInjectionTime,
+    forMainFrameOnly: Bool
+) -> WKUserScript? {
+    #if os(tvOS)
+    return UtvWebKitMakeUserScript(source, injectionTime.rawValue, forMainFrameOnly)
+    #else
+    return WKUserScript(source: source, injectionTime: injectionTime, forMainFrameOnly: forMainFrameOnly, in: .page)
+    #endif
+}
 
 private let resourceBundle: Bundle = {
     // In the .app bundle, resources are in Contents/Resources/.
@@ -27,6 +45,16 @@ struct AdBlocker {
     // MARK: - Content Blocker Rules
 
     private static func compileContentRules(for controller: WKUserContentController) {
+        #if os(tvOS)
+        // The runtime class IS available on tvOS, but a static Swift reference
+        // to `WKContentRuleListStore` puts `_OBJC_CLASS_$_WKContentRuleListStore`
+        // into the binary's flat-namespace bind list, which dyld kills the
+        // process over at launch (WebKit isn't link-time linked on tvOS — see
+        // UtvWebKitBootstrap). The CSS-hide + scriptlet layers below are
+        // sufficient for ad blocking; revisit if we need a content blocker.
+        NSLog("[AdBlocker] Skipping WKContentRuleList on tvOS")
+        return
+        #else
         guard let url = resourceBundle.url(forResource: "content-rules", withExtension: "json"),
               let jsonString = try? String(contentsOf: url, encoding: .utf8) else {
             NSLog("[AdBlocker] content-rules.json not found")
@@ -46,6 +74,7 @@ struct AdBlocker {
                 NSLog("[AdBlocker] Content rules compiled and loaded")
             }
         }
+        #endif
     }
 
     // MARK: - CSS Hiding
@@ -81,13 +110,15 @@ struct AdBlocker {
         })();
         """
 
-        let script = WKUserScript(
+        if let script = makePageUserScript(
             source: js,
             injectionTime: .atDocumentStart,
-            forMainFrameOnly: false,
-            in: .page
-        )
-        controller.addUserScript(script)
+            forMainFrameOnly: false
+        ) {
+            controller.addUserScript(script)
+        } else {
+            NSLog("[AdBlocker] WKUserScript unavailable — CSS hide skipped")
+        }
     }
 
     // MARK: - Scriptlet Injection
@@ -104,14 +135,16 @@ struct AdBlocker {
         // activate json-prune, prevent-fetch, prevent-xhr etc. to strip ad payloads.
         // CRITICAL: Must inject into .page world so scriptlets can intercept the page's
         // fetch/XHR/JSON.parse — the default .defaultClient world is isolated.
-        let script = WKUserScript(
+        if let script = makePageUserScript(
             source: bundle,
             injectionTime: .atDocumentStart,
-            forMainFrameOnly: false,
-            in: .page
-        )
-        controller.addUserScript(script)
-        NSLog("[AdBlocker] Scriptlet bundle injected (\(bundle.count) bytes)")
+            forMainFrameOnly: false
+        ) {
+            controller.addUserScript(script)
+            NSLog("[AdBlocker] Scriptlet bundle injected (\(bundle.count) bytes)")
+        } else {
+            NSLog("[AdBlocker] WKUserScript unavailable — scriptlet bundle skipped")
+        }
     }
 }
 
