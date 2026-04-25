@@ -17,3 +17,7 @@ Sources/Resources/ubo-scriptlets.js
 DerivedData/
 build/
 .claude/
+
+# Vendored WebKit headers for tvOS bridge (regenerate with `just sync-webkit-headers`)
+# Apple SDK headers — not redistributed; synced from local Xcode install.
+tvOS/Vendored/

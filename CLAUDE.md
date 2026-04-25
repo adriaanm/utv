@@ -80,20 +80,22 @@ The SwiftData store lives at `~/Library/Containers/com.utv.app/Data/Library/Appl
 
 ## Build
 
-Builds with SwiftPM (`swift build`). Requires the Xcode toolchain:
+Builds with SwiftPM (`swift build`). Requires a full Xcode.app install (Command Line Tools alone are no longer sufficient — see below):
 
 ```
 sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 ```
 
-### Xcode toolchain dependencies
+### Xcode.app dependencies
 
-No Xcode.app dependencies remain. The build uses only the Swift toolchain and standard macOS tools:
+Xcode.app is required for the **iOS SDK WebKit headers**, which the tvOS bridge vendors via `just sync-webkit-headers`. tvOS itself ships no public WebKit headers; we copy the iOS SDK's headers (same WebKit binary surface) and link with `-undefined dynamic_lookup`. See [docs/tvos-port.md](docs/tvos-port.md).
+
+For the macOS build alone, the dependency is lighter:
 
 - **SwiftData macros** — replaced by custom macros (`@StoredModel`, `@Unique`, `@Relation`) in `Macros/UtvMacros/`, built from source via SwiftPM with swift-syntax.
 - **`actool`** — replaced by `iconutil` (ships with Command Line Tools). The app icon lives in `AppIcon.iconset/` and is compiled to `.icns` by `bundle-app.sh`.
 
-Compilation, linking, code signing, and app bundle assembly all work with just the Swift toolchain, `iconutil`, and `codesign`.
+So macOS-only compilation, linking, code signing, and bundling work with just the Swift toolchain, `iconutil`, and `codesign` — but the tvOS port pulls Xcode.app back in as a hard dependency, and the project no longer aims to keep CLT-only viable.
 
 ## Just recipes
 

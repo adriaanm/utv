@@ -4,6 +4,25 @@
 sync:
     ./scripts/sync-ubo.sh --update
 
+# Vendor WebKit headers from the iOS SDK for the tvOS bridge.
+# tvOS SDK ships no public WebKit headers; iOS SDK has the same WebKit binary surface.
+# Re-run after every Xcode update. See docs/tvos-port.md.
+sync-webkit-headers:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sdk=$(xcrun --sdk iphoneos --show-sdk-path)
+    src="$sdk/System/Library/Frameworks/WebKit.framework/Headers"
+    dst="tvOS/Vendored/WebKit"
+    if [ ! -d "$src" ]; then
+        echo "iOS SDK WebKit headers not found at $src" >&2
+        echo "Install Xcode, then: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer" >&2
+        exit 1
+    fi
+    rm -rf "$dst" && mkdir -p "$dst"
+    cp "$src/"*.h "$dst/"
+    count=$(ls -1 "$dst" | wc -l | tr -d ' ')
+    echo "Vendored $count WebKit headers from $sdk"
+
 # Build the app (debug)
 build: _ensure-resources
     swift build
