@@ -171,7 +171,8 @@ This doc rewrites itself: "Strategy" becomes "How the bridge works", "Risks" bec
 - [x] **Consent-cookie gate on tvOS `ContentView`** — Siri Remote can't click YouTube's GDPR consent banner inside a WKWebView (no DOM focus engine bridge), so on tvOS we never show the banner: `ContentView` waits for the Mac → TV sync to deliver the SOCS cookie (see [docs/sync-design.md](sync-design.md)) before mounting `WebPlayerView`. If the Mac isn't reachable, an actionable retry view fronts the WebView. Cached cookies from prior sessions are re-injected before mount via `ConsentManager.ensureConsent()`.
 - [ ] First sideload to Apple TV — verify ad blocking + playback
 - [ ] Restore tvOS app icon — currently empty (see "Asset catalog" below)
-- [ ] Focus-driven `ContentView` for tvOS — channel list, video list, player. Design after first hardware smoke test confirms WKWebView playback works. Will likely need a JS focus-engine shim (UIPress events → DOM focus + synthetic clicks) so the Siri Remote can drive HTML controls inside the WebView; tvosbrowser is the reference implementation.
+- [ ] **d-pad navigation inside the WKWebView** — Siri Remote presses → DOM focus + synthetic clicks. Prerequisite for any HTML-driven UI on tvOS, including the focus-driven channel browser. Picks up after first sideload validates cookie sync + playback. Full design + edge cases in [docs/tvos-dpad-navigation.md](tvos-dpad-navigation.md).
+- [ ] Focus-driven `ContentView` for tvOS — channel list, video list, player. Blocked on the d-pad bridge above; the shape of the UI (HTML inside WebView vs. native SwiftUI alongside it) depends on how tractable the JS focus shim turns out to be.
 
 ### Cross-compile invocation
 
