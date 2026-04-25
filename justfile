@@ -12,7 +12,7 @@ sync-webkit-headers:
     set -euo pipefail
     sdk=$(xcrun --sdk iphoneos --show-sdk-path)
     src="$sdk/System/Library/Frameworks/WebKit.framework/Headers"
-    dst="Sources/UtvWebKitTV/include/WebKit"
+    dst="Sources/VendoredWebKit/include/WebKit"
     if [ ! -d "$src" ]; then
         echo "iOS SDK WebKit headers not found at $src" >&2
         echo "Install Xcode, then: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer" >&2

@@ -38,28 +38,32 @@ just sync-webkit-headers
 
 Layout:
 ```
-Sources/UtvWebKitTV/include/WebKit/
+Sources/VendoredWebKit/include/WebKit/
     WKWebView.h
     WKWebViewConfiguration.h
     WKUserContentController.h
     ...
 ```
 
-Gitignored. Re-run after every Xcode update.
+Gitignored. Re-run after every Xcode update. Owned by the `VendoredWebKit` target so a single header copy serves both `UtvWebKitTV`'s `#import`s and the `module WebKit` Swift shim.
 
 ## Module layout
 
 ```
 Sources/
-  UtvWebKitTV/                   # ObjC bridge target. tvOS only — no-op on macOS.
+  UtvWebKitTV/                   # ObjC bridge target. tvOS-only logic; no-op on macOS.
     include/
       UtvWebKitTV.h              # bootstrap + smoke test + private prefs setter
+      module.modulemap           # exposes UtvWebKitTV module to Swift
+    UtvWebKitTV.m                # dlopen + respondsToSelector smoke check + _setMediaSourceEnabled: etc.
+  VendoredWebKit/                # tvOS-only. Owns vendored iOS-SDK WebKit headers + `module WebKit` shim.
+    include/
+      module.modulemap           # `module WebKit { umbrella header "WebKit/WebKit.h" ... }`
       WebKit/                    # gitignored, populated by `just sync-webkit-headers`
         WKWebView.h
         WKWebViewConfiguration.h
         ...
-      module.modulemap           # exposes UtvWebKitTV to Swift; (later) WebKit module on tvOS
-    UtvWebKitTV.m                # dlopen + respondsToSelector smoke check + _setMediaSourceEnabled: etc.
+    VendoredWebKit.m             # placeholder so SwiftPM treats the target as buildable
   WebPlayerView.swift            # Coordinator logic stays here, shared across platforms
   WebPlayerView+macOS.swift      # NSViewRepresentable using system WKWebView directly
   WebPlayerView+tvOS.swift       # UIViewRepresentable using WKWebView via vendored module
@@ -134,8 +138,8 @@ This doc rewrites itself: "Strategy" becomes "How the bridge works", "Risks" bec
 - [x] Plan + header-vendoring recipe (`just sync-webkit-headers`) committed
 - [x] `Sources/UtvWebKitTV/` bridge target scaffolded — `UtvWebKitBootstrap()`, `UtvWebKitIsAvailable()`, `UtvWebKitEnableYouTubeMediaPrefs()`. Wired into `WebPlayerView.makeWebView`. No-op on macOS, ready for tvOS code paths.
 - [x] `Package.swift` declares the `UtvWebKitTV` target with `-undefined dynamic_lookup` linker flag and tvOS-conditioned vendored-headers search path.
+- [x] `VendoredWebKit` target added — owns the gitignored iOS-SDK WebKit headers and a `module.modulemap` declaring `module WebKit`. Conditionally depended on by `utv` and `UtvWebKitTV` only on tvOS.
 - [ ] `Package.swift` declares tvOS as a supported platform (currently macOS-only)
-- [ ] `module.modulemap` re-publishes vendored WebKit as `module WebKit` for tvOS Swift
 - [ ] `WebPlayerView` split into platform-specific representables
 - [ ] tvOS app target with focus-driven `ContentView+tvOS`
 - [ ] Bundle + deploy scripts (`just bundle-tv`, `just deploy-tv`)
@@ -145,3 +149,13 @@ This doc rewrites itself: "Strategy" becomes "How the bridge works", "Risks" bec
 
 - SwiftPM's auto-generated modulemap rejects sibling directories next to an umbrella header (we have `include/UtvWebKitTV.h` AND `include/WebKit/`). An explicit `include/module.modulemap` listing only `UtvWebKitTV.h` sidesteps the check.
 - `WKWebViewConfiguration *` parameter in the bridge header is forward-declared (`@class WKWebViewConfiguration;`). This avoids requiring importers of `UtvWebKitTV` to also see the WebKit module — Swift unifies the type at the call site via its own `import WebKit`.
+
+### Exposing `module WebKit` to Swift on tvOS
+
+Cross-platform Swift code (`WebPlayerView`, `AdBlocker`) does `import WebKit`. On macOS that resolves to the system framework. On tvOS the system has no WebKit Swift/clang module — we need a clang module declaration that points at the vendored headers.
+
+A `module WebKit` declaration inside `UtvWebKitTV/include/` would conflict with the system WebKit on macOS where both would be visible to the same target. Solution: a **separate `VendoredWebKit` target conditionally depended on only for tvOS** (`condition: .when(platforms: [.tvOS])`). Its `include/` directory owns the gitignored vendored headers plus a tracked `module.modulemap` declaring `module WebKit { umbrella header "WebKit/WebKit.h" export * module * { export * } }`. On macOS the target isn't in the build graph at all, so its modulemap is invisible. On tvOS it is, and Swift's `import WebKit` resolves to it.
+
+`UtvWebKitTV` (the ObjC bridge) also depends on `VendoredWebKit` on tvOS via `headerSearchPath("../VendoredWebKit/include")`, so its `#import "WebKit/WKWebView.h"` etc. find the same single-source-of-truth header copy.
+
+`just sync-webkit-headers` writes the headers into `VendoredWebKit/include/WebKit/`. The modulemap and bridge target both reference that location.

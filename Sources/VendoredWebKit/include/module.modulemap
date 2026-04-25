@@ -1,0 +1,11 @@
+// Re-publishes the iOS-SDK WebKit headers (vendored in WebKit/) as `module WebKit`
+// for tvOS Swift code. Headers are gitignored and populated by `just sync-webkit-headers`.
+//
+// Only added to the build graph for tvOS (see Package.swift). On macOS, Swift continues
+// to use the system WebKit framework and this modulemap is invisible.
+
+module WebKit {
+    umbrella header "WebKit/WebKit.h"
+    export *
+    module * { export * }
+}
