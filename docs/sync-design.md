@@ -146,11 +146,18 @@ If both sides report a connectivity error despite being on the same LAN:
 4. **AP isolation.** Some routers block mDNS between Wi-Fi clients (especially across 2.4 / 5 / 6 GHz radios or "guest" SSIDs). Verify both devices are on the same SSID and that client-isolation is off.
 5. **Symptoms.** When the Mac isn't advertising, the TV's `runTVStartupPull` times out with `SyncProtocolError.timeout` — that's the "connectivity error" the TV surfaces. Always check the Mac side first; the TV side is mostly downstream noise from a missing advertiser.
 
+### MCSession-specific traps (already fixed; left here as a guide for future transport changes)
+
+Two non-obvious failures that an end-to-end Mac↔TV exchange will surface as "connecting, then immediately disconnects" — neither produces a useful error from the framework:
+
+- **`encryptionPreference: .required` requires an explicit cert handler.** If both peers ask for `.required` (we do) and the `MCSessionDelegate` does not implement `session(_:didReceiveCertificate:fromPeer:certificateHandler:)`, the framework defaults to *deny*. The session goes connecting → notConnected with no log line above MCSession's own debug noise. Trusted personal LAN means we just call `certificateHandler(true)`.
+- **Responder must outlive its `session.send`.** `MCSession.delegate` is weak. If the responder's `ActiveSession` is the only strong ref to the session and the advertiser nils it out the moment we hand the reply to `session.send(...)`, the whole graph deallocates before the framework flushes the bytes — the initiator sees notConnected ~30 ms after sending its request, and the Mac log prints `Sending 25608 bytes ... No route to participant -- disconnected` back-to-back. Fix: split "exchange complete" from "drop the strong ref"; only release after we observe the peer-initiated disconnect (`notConnected`).
+
 ## Validation status
 
 - `swift build` (macOS) passes.
 - tvOS compilation requires the tvOS SDK (Xcode.app). Not validated in CI here; verify with `just build-tv` before sideloading.
-- Hardware end-to-end (Mac + paired Apple TV) — TBD on first real run.
+- Hardware end-to-end (Mac mini + Apple TV 4K, Wi-Fi, both on `192.168.178.0/24`): tvOS startup pull connects, exchanges JSON, applies the SOCS cookie, and `ContentView` advances from `.preparing` to `.ready`. Mac advertiser receives the 67-byte tvOS bundle and ships back a 25 608-byte canonical bundle. See `[Sync]` traces in the device console for the exact sequence.
 
 ## Follow-ups
 
