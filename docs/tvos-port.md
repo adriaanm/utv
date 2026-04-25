@@ -1,6 +1,6 @@
 # tvOS Port Plan
 
-Status: **in progress.** Foundation scaffolding underway. This doc evolves into a guide once implemented. Progress checklist at the bottom.
+Status: **in progress.** App launches on Apple TV; ad-blocker + UI smoke test pending. Progress checklist at the bottom.
 
 ## Goal
 
@@ -17,6 +17,16 @@ tvOS ships WebKit on-device at `/System/Library/Frameworks/WebKit.framework/`, b
 3. **`dlopen("/System/Library/Frameworks/WebKit.framework/WebKit")`** at app launch to load the framework.
 
 Result: tvOS callsites read identically to macOS — `WKWebView *web = [[WKWebView alloc] initWithFrame:bounds configuration:cfg]`. No `objc_msgSend` reflection in our code, type-checked, autocompletes. The Objective-C compiler doesn't emit static dispatch for ObjC method calls anyway (always `objc_msgSend`), so the only thing we need from the linker is the class symbol — which `dynamic_lookup` defers to runtime.
+
+### Caveat: dyld eagerly binds class refs
+
+`-undefined dynamic_lookup` defers function symbol resolution to runtime, but ObjC class refs (`_OBJC_CLASS_$_WKFoo` entries in `__objc_classrefs`) are **eagerly bound by dyld during image load**, before any user code runs — including before `UtvWebKitBootstrap` can `dlopen` WebKit. If the symbol isn't already in the flat namespace at that point, dyld kills the process with `symbol not found in flat namespace '_OBJC_CLASS_$_WKWebView'`.
+
+This means **any Swift class-level reference** to a WebKit class — `WKWebView(frame:configuration:)`, `WKWebViewConfiguration()`, `WKWebsiteDataStore.default()`, `WKUserScript(source:…)`, `WKContentWorld.page` — emits a class ref that dyld will fail on at launch. Instance-level method calls on already-typed values are fine (selector dispatch via `objc_msgSend`); only class-level construction and class-method calls produce the offending refs.
+
+Workaround: every WebKit class construction or class-method call on tvOS goes through a C bridge function in `UtvWebKitTV.m` that uses `NSClassFromString` (resolved at runtime *after* the dlopen). Currently bridged: `UtvWebKitMakeWebView`, `UtvWebKitMakeConfiguration`, `UtvWebKitMakeUserScript`, `UtvWebKitDefaultDataStore`, `UtvWebKitAllWebsiteDataTypes`. macOS keeps the direct Swift constructors via `#if os(tvOS) … #else … #endif`. `WKContentRuleListStore` is skipped entirely on tvOS (see `AdBlocker.compileContentRules`); CSS-hide + scriptlet injection fill the gap.
+
+The Objective-C bridge itself can use the WebKit types as parameter / return types in its function signatures — those don't emit class refs, only forward declarations.
 
 For **genuinely private APIs** (the media prefs that tvosbrowser found necessary for YouTube playback), we declare them in our own category header. Clang trusts headers, runtime dispatches normally:
 
@@ -160,6 +170,8 @@ This doc rewrites itself: "Strategy" becomes "How the bridge works", "Risks" bec
 - [x] **Library/executable refactor** — split SwiftPM target into `utvCore` library + thin `utv` executable. `AppRoot` extracts the SwiftUI Scene so the tvOS Xcode target reuses it.
 - [x] **XcodeGen scaffold** — `tvos/project.yml` generates `utv-tv.xcodeproj` (gitignored) consuming the SwiftPM package's `utvCore` + `UtvWebKitTV` library products.
 - [x] **`just bundle-tv` + `just deploy-tv`** — `xcodebuild` produces a Release `.app`; `scripts/deploy-tv.sh` builds signed and installs to the single paired Apple TV via `xcrun devicectl device install app`.
+- [x] **`just launch-tv` / `launch-tv-console` / `iterate-tv` / `kill-tv`** — `$TV_DEVICE_ID`-driven recipes wrapping `xcrun devicectl device process …`. `iterate-tv` chains deploy + launch-with-console for the dyld-error iteration loop. `TV_DEVICE_ID` lives in `.envrc` (direnv).
+- [x] **App launches on Apple TV** — clean dyld load. Took routing every WebKit class construction through a C bridge in `UtvWebKitTV.m` (see "Caveat: dyld eagerly binds class refs" above). AdBlocker scriptlet injection succeeds; WebKit's filesystem-permission warnings on launch are non-fatal sandbox noise.
 - [ ] First sideload to Apple TV — verify ad blocking + playback + Siri Remote
 - [ ] Restore tvOS app icon — currently empty (see "Asset catalog" below)
 - [ ] Focus-driven `ContentView` for tvOS — channel list, video list, player. Design after first hardware smoke test confirms WKWebView playback works.
