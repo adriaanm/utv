@@ -1,0 +1,44 @@
+name: utv-tv
+options:
+  bundleIdPrefix: com.utv
+  minimumXcodeGenVersion: "2.0"
+  generateEmptyDirectories: true
+  # The package root is one directory up from this project.yml.
+  # Generated .xcodeproj sits inside tvos/ (gitignored).
+
+# Local SwiftPM package as a dependency. The tvOS app target consumes
+# the `utvCore` library product (see Package.swift).
+packages:
+  utv:
+    path: ..
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  utv-tv:
+    type: application
+    platform: tvOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: utv-tv
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.utv.tv
+        PRODUCT_NAME: utv
+        SWIFT_VERSION: "5.9"
+        TVOS_DEPLOYMENT_TARGET: "17.0"
+        TARGETED_DEVICE_FAMILY: "3"
+        INFOPLIST_FILE: utv-tv/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
+        # tvOS WebKit has no link-time stub. Defer unresolved symbols
+        # (_OBJC_CLASS_$_WKWebView, etc.) to runtime resolution. The app
+        # bootstraps WebKit.framework via dlopen at launch.
+        OTHER_LDFLAGS: "-Xlinker -undefined -Xlinker dynamic_lookup"
+    dependencies:
+      - package: utv
+        product: utvCore
+      - package: utv
+        product: UtvWebKitTV
