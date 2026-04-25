@@ -141,11 +141,27 @@ This doc rewrites itself: "Strategy" becomes "How the bridge works", "Risks" bec
 - [x] `VendoredWebKit` target added — owns the gitignored iOS-SDK WebKit headers and a `module.modulemap` declaring `module WebKit`. Conditionally depended on by `utv` and `UtvWebKitTV` only on tvOS.
 - [x] `Package.swift` declares `tvOS(.v17)` as a supported platform.
 - [x] `just sync-webkit-headers` patches iOS-only UIKit references in `WKNavigationAction.h` / `WKUIDelegate.h` so the WebKit clang module compiles on tvOS. (See "Header patching" below.)
-- [x] tvOS clang build of the `UtvWebKitTV` and `VendoredWebKit` targets verified — `swift build --triple arm64-apple-tvos17.0 --sdk $(xcrun --sdk appletvos --show-sdk-path)`.
-- [ ] `WebPlayerView` split into platform-specific representables
-- [ ] tvOS app target with focus-driven `ContentView+tvOS`
-- [ ] Bundle + deploy scripts (`just bundle-tv`, `just deploy-tv`)
+- [x] tvOS clang build of the `UtvWebKitTV` and `VendoredWebKit` targets verified.
+- [x] `just build-tv` recipe — runs `swift build --triple arm64-apple-tvos17.0 --sdk $(xcrun --sdk appletvos --show-sdk-path)`.
+- [x] `WebPlayerView` and `ConsentWebView` platform-conditioned: `NSViewRepresentable` on macOS, `UIViewRepresentable` on tvOS, all coordinator/JS-injection logic shared.
+- [x] `ContentView` macOS body wrapped in `#if os(macOS)`; minimal tvOS placeholder `ContentView` loads a hardcoded `WebPlayerView` for first-sideload smoke test.
+- [x] `utvApp` `.commands` and `.defaultSize` scoped to macOS.
+- [x] **Whole-package tvOS build green** — `swift build --triple arm64-apple-tvos17.0` links a tvOS executable. Two non-fatal warnings: `using sysroot for 'MacOSX' but targeting 'AppleTV'` (clang on the C target) and `-undefined dynamic_lookup is deprecated on tvOS` (linker — still works).
+- [ ] Bundle + deploy scripts (`just bundle-tv`, `just deploy-tv`) — Info.plist, code signing, ipa packaging, install to paired Apple TV
 - [ ] First sideload to Apple TV — verify ad blocking + playback + Siri Remote
+- [ ] Focus-driven `ContentView` for tvOS — channel list, video list, player. Design after first hardware smoke test confirms WKWebView playback works.
+
+### Cross-compile invocation
+
+```sh
+just build-tv
+# == swift build --triple arm64-apple-tvos17.0 --sdk $(xcrun --sdk appletvos --show-sdk-path)
+```
+
+Two warnings during the cross-compile are expected and harmless:
+
+1. `clang: warning: using sysroot for 'MacOSX' but targeting 'AppleTV'` — SwiftPM's auto-detected sysroot for the C target is the host's macOS SDK, but the explicit `--triple` makes clang target tvOS. The vendored WebKit headers + UIKit references all resolve via the explicit `-isysroot` we'd otherwise pass; in practice it builds cleanly.
+2. `ld: warning: -undefined dynamic_lookup is deprecated on tvOS` — Apple has deprecated the flag for App Store builds, but it still works. We rely on it because the tvOS SDK exposes no link-time stub for WebKit; `UtvWebKitBootstrap()` `dlopen`s the framework before any WKWebView use. Since this is a personal-sideload project, the deprecation doesn't affect us.
 
 ### Notes from scaffolding
 

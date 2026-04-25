@@ -2,6 +2,7 @@ import SwiftUI
 import WebKit
 import UtvWebKitTV
 
+#if os(macOS)
 struct WebPlayerView: NSViewRepresentable {
     let videoID: String?
     var maximized: Bool = false
@@ -12,6 +13,18 @@ struct WebPlayerView: NSViewRepresentable {
     func updateNSView(_ webView: WKWebView, context: Context) { updateWebView(webView, context: context) }
     func makeCoordinator() -> Coordinator { Coordinator() }
 }
+#else
+struct WebPlayerView: UIViewRepresentable {
+    let videoID: String?
+    var maximized: Bool = false
+    var startAt: Double = 0
+    var onPositionUpdate: ((Double, Double) -> Void)?
+
+    func makeUIView(context: Context) -> WKWebView { makeWebView(context: context) }
+    func updateUIView(_ webView: WKWebView, context: Context) { updateWebView(webView, context: context) }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+}
+#endif
 
 // MARK: - Shared Implementation
 
@@ -116,9 +129,11 @@ extension WebPlayerView {
         func userContentController(_ userContentController: WKUserContentController,
                                    didReceive message: WKScriptMessage) {
             if message.name == "utvFullscreen" {
+                #if os(macOS)
                 if let window = webView?.window {
                     window.toggleFullScreen(nil)
                 }
+                #endif
                 return
             }
 

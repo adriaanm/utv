@@ -7,6 +7,7 @@ struct utvApp: App {
         WindowGroup {
             ContentView()
         }
+        #if os(macOS)
         .defaultSize(width: 1280, height: 800)
         .commands {
             CommandGroup(after: .appSettings) {
@@ -18,6 +19,7 @@ struct utvApp: App {
                 }
             }
         }
+        #endif
         .modelContainer(for: [Channel.self, Video.self])
     }
 }

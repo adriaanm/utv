@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 
+#if os(macOS)
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @StoredQuery(sort: \Channel.displayName) private var channels: [Channel]
@@ -592,3 +593,19 @@ func formatTime(_ seconds: Double) -> String {
     }
     return String(format: "%d:%02d", m, sec)
 }
+#else
+// tvOS: placeholder for first hardware-validation sideload. Loads a single hardcoded
+// watch URL so we can verify the WKWebView ad-block pipeline survives on the device.
+// Full focus-driven channel/video browser comes after that smoke test passes.
+struct ContentView: View {
+    var body: some View {
+        WebPlayerView(
+            videoID: "dQw4w9WgXcQ",
+            maximized: true,
+            startAt: 0,
+            onPositionUpdate: nil
+        )
+        .ignoresSafeArea()
+    }
+}
+#endif

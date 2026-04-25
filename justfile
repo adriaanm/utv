@@ -35,6 +35,17 @@ sync-webkit-headers:
 build: _ensure-resources
     swift build
 
+# Build for tvOS (debug). Personal-sideload only — uses vendored WebKit headers.
+build-tv: _ensure-resources
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -d Sources/VendoredWebKit/include/WebKit ]; then
+        echo "Vendored WebKit headers missing — run 'just sync-webkit-headers' first." >&2
+        exit 1
+    fi
+    sdk=$(xcrun --sdk appletvos --show-sdk-path)
+    swift build --triple arm64-apple-tvos17.0 --sdk "$sdk"
+
 # Build and assemble + launch .app bundle
 run: build
     ./scripts/bundle-app.sh
