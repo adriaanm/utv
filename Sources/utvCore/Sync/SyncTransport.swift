@@ -61,6 +61,7 @@ public final class SyncAdvertiser: NSObject {
         a.delegate = self
         a.startAdvertisingPeer()
         advertiser = a
+        NSLog("[Sync] Advertiser started as %@", peerID.displayName)
     }
 
     public func stop() {
@@ -80,9 +81,11 @@ extension SyncAdvertiser: MCNearbyServiceAdvertiserDelegate {
     ) {
         // Auto-accept; trusted personal LAN.
         Task { @MainActor in
+            NSLog("[Sync] Advertiser received invitation from %@", peerID.displayName)
             // Only accept one connection at a time. If we already have one
             // in progress, refuse this one.
             if self.activeSession != nil {
+                NSLog("[Sync] Advertiser rejecting invitation (already busy)")
                 invitationHandler(false, nil)
                 return
             }
@@ -92,6 +95,7 @@ extension SyncAdvertiser: MCNearbyServiceAdvertiserDelegate {
             }
             self.activeSession = active
             session.delegate = active
+            NSLog("[Sync] Advertiser accepting invitation from %@", peerID.displayName)
             invitationHandler(true, session)
         }
     }
@@ -133,6 +137,7 @@ public final class SyncBrowser: NSObject {
         incoming: @escaping IncomingBundle,
         timeout: TimeInterval = 15
     ) async throws {
+        NSLog("[Sync] Browser exchange starting as %@", peerID.displayName)
         let session = MCSession(peer: peerID, securityIdentity: nil, encryptionPreference: .required)
         self.session = session
 
@@ -143,9 +148,11 @@ public final class SyncBrowser: NSObject {
         defer { teardown() }
 
         // 1. Discover a peer.
+        NSLog("[Sync] Browser starting discovery (timeout=%.1fs)", timeout)
         let remote = try await withTimeout(timeout) {
             try await self.findPeer(browser: browser)
         }
+        NSLog("[Sync] Browser found peer %@", remote.displayName)
 
         // 2. Set up an active-session driver and invite the peer.
         let active = ActiveSession(
@@ -159,12 +166,14 @@ public final class SyncBrowser: NSObject {
         }
         self.active = active
         session.delegate = active
+        NSLog("[Sync] Browser inviting %@ (timeout=%.1fs)", remote.displayName, timeout)
         browser.invitePeer(remote, to: session, withContext: nil, timeout: timeout)
 
         // 3. Wait for the exchange to finish.
         try await withTimeout(timeout) {
             try await active.waitUntilDone()
         }
+        NSLog("[Sync] Browser exchange completed")
     }
 
     private func findPeer(browser: MCNearbyServiceBrowser) async throws -> MCPeerID {
@@ -233,6 +242,7 @@ private final class ActiveSession: NSObject, MCSessionDelegate {
 
     private var doneContinuation: CheckedContinuation<Void, Error>?
     private var hasFinished = false
+    private var hasReleased = false
 
     // Initiator init.
     init(
@@ -277,10 +287,16 @@ private final class ActiveSession: NSObject, MCSessionDelegate {
     }
 
     func tearDown() {
-        finish(.success(()))
+        finish(.success(()), disconnect: true)
+        release()
     }
 
-    private func finish(_ result: Result<Void, Error>) {
+    // Marks the exchange complete (resumes the awaiter, optionally tears down the
+    // transport). Does *not* drop the owner's strong reference — that's `release()`.
+    // Splitting them lets the responder hold onto its ActiveSession (and therefore
+    // its MCSession) until the peer-initiated disconnect actually arrives, so the
+    // 25 KB reply isn't truncated mid-flight by an early dealloc.
+    private func finish(_ result: Result<Void, Error>, disconnect: Bool) {
         guard !hasFinished else { return }
         hasFinished = true
         if let cont = doneContinuation {
@@ -290,13 +306,28 @@ private final class ActiveSession: NSObject, MCSessionDelegate {
             case .failure(let err): cont.resume(throwing: err)
             }
         }
-        session.disconnect()
+        if disconnect {
+            session.disconnect()
+        }
+    }
+
+    private func release() {
+        guard !hasReleased else { return }
+        hasReleased = true
         onDone()
     }
 
     // MARK: MCSessionDelegate
 
     nonisolated func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
+        let stateName: String
+        switch state {
+        case .connected: stateName = "connected"
+        case .connecting: stateName = "connecting"
+        case .notConnected: stateName = "notConnected"
+        @unknown default: stateName = "unknown(\(state.rawValue))"
+        }
+        NSLog("[Sync] Session state for %@ → %@", peerID.displayName, stateName)
         Task { @MainActor in
             switch state {
             case .connected:
@@ -305,23 +336,36 @@ private final class ActiveSession: NSObject, MCSessionDelegate {
                         guard let outgoing = self.outgoing else { return }
                         let bundle = try await outgoing()
                         let data = try SyncCoding.encoder.encode(bundle)
+                        NSLog("[Sync] Initiator sending bundle (%d bytes)", data.count)
                         try session.send(data, toPeers: [peerID], with: .reliable)
                     } catch {
-                        self.finish(.failure(error))
+                        NSLog("[Sync] Initiator send failed: %@", String(describing: error))
+                        self.finish(.failure(error), disconnect: true)
                     }
                 }
                 // Responder waits for didReceive data.
             case .notConnected:
                 // If we haven't successfully finished the exchange yet, surface the disconnect.
                 if !self.hasFinished {
-                    self.finish(.failure(SyncProtocolError.transport("disconnected")))
+                    NSLog("[Sync] Disconnect before exchange finished — failing")
+                    self.finish(.failure(SyncProtocolError.transport("disconnected")), disconnect: false)
                 }
+                // Now safe to drop our owner's strong ref: the transport has torn
+                // down, no more delegate callbacks will arrive.
+                self.release()
             case .connecting:
                 break
             @unknown default:
                 break
             }
         }
+    }
+
+    nonisolated func session(_ session: MCSession, didReceiveCertificate certificate: [Any]?, fromPeer peerID: MCPeerID, certificateHandler: @escaping (Bool) -> Void) {
+        // Auto-trust on a personal LAN. Without an explicit handler, the framework
+        // defaults to denying when MCEncryptionPreference == .required.
+        NSLog("[Sync] Auto-trusting certificate from %@ (count=%d)", peerID.displayName, certificate?.count ?? 0)
+        certificateHandler(true)
     }
 
     nonisolated func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
@@ -334,16 +378,23 @@ private final class ActiveSession: NSObject, MCSessionDelegate {
                 switch self.role {
                 case .initiator:
                     try await self.incoming?(bundle)
-                    self.finish(.success(()))
+                    // Initiator owns the disconnect — responder waits for our close.
+                    self.finish(.success(()), disconnect: true)
                 case .responder:
                     guard let respond = self.respond else { return }
                     let reply = try await respond(bundle)
                     let outData = try SyncCoding.encoder.encode(reply)
+                    NSLog("[Sync] Responder sending reply (%d bytes)", outData.count)
                     try session.send(outData, toPeers: [peerID], with: .reliable)
-                    self.finish(.success(()))
+                    // Mark complete but DON'T disconnect — calling disconnect()
+                    // here truncates the in-flight reply before the framework can
+                    // flush it. Let the initiator close the session after applying
+                    // our reply; we'll observe notConnected and that's fine because
+                    // hasFinished is already true.
+                    self.finish(.success(()), disconnect: false)
                 }
             } catch {
-                self.finish(.failure(error))
+                self.finish(.failure(error), disconnect: true)
             }
         }
     }
