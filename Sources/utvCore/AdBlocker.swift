@@ -45,22 +45,26 @@ struct AdBlocker {
     // MARK: - Content Blocker Rules
 
     private static func compileContentRules(for controller: WKUserContentController) {
-        #if os(tvOS)
-        // The runtime class IS available on tvOS, but a static Swift reference
-        // to `WKContentRuleListStore` puts `_OBJC_CLASS_$_WKContentRuleListStore`
-        // into the binary's flat-namespace bind list, which dyld kills the
-        // process over at launch (WebKit isn't link-time linked on tvOS — see
-        // UtvWebKitBootstrap). The CSS-hide + scriptlet layers below are
-        // sufficient for ad blocking; revisit if we need a content blocker.
-        NSLog("[AdBlocker] Skipping WKContentRuleList on tvOS")
-        return
-        #else
         guard let url = resourceBundle.url(forResource: "content-rules", withExtension: "json"),
               let jsonString = try? String(contentsOf: url, encoding: .utf8) else {
             NSLog("[AdBlocker] content-rules.json not found")
             return
         }
 
+        #if os(tvOS)
+        // tvOS: route through the UtvWebKitTV bridge so we don't embed a class ref to
+        // WKContentRuleListStore (dyld eagerly binds those before UtvWebKitBootstrap
+        // runs — see docs/tvos-port.md). The runtime class itself is shipped in
+        // /System/Library/Frameworks/WebKit.framework on tvOS, just not exposed in
+        // the public SDK headers; resolving via NSClassFromString works.
+        UtvWebKitCompileContentRuleList(controller, "utv-rules", jsonString) { error in
+            if let error = error {
+                NSLog("[AdBlocker] tvOS content rules unavailable: \(error.localizedDescription)")
+            } else {
+                NSLog("[AdBlocker] Content rules compiled and loaded (tvOS bridge)")
+            }
+        }
+        #else
         WKContentRuleListStore.default().compileContentRuleList(
             forIdentifier: "utv-rules",
             encodedContentRuleList: jsonString

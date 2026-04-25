@@ -6,6 +6,7 @@
 @class WKWebViewConfiguration;
 @class WKUserScript;
 @class WKWebsiteDataStore;
+@class WKUserContentController;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -41,5 +42,16 @@ WKWebsiteDataStore * _Nullable UtvWebKitDefaultDataStore(void);
 
 /// Look up `WKWebsiteDataStore.allWebsiteDataTypes` via NSClassFromString.
 NSSet<NSString *> * _Nullable UtvWebKitAllWebsiteDataTypes(void);
+
+/// Compile a JSON content blocker rule list and add it to the given user content controller.
+/// Routes through `WKContentRuleListStore` resolved via NSClassFromString so we don't pull
+/// `_OBJC_CLASS_$_WKContentRuleListStore` into the binary's flat-namespace bind list (which
+/// dyld kills the process over on tvOS — see UtvWebKitBootstrap caveat).
+/// `completion` is invoked on the main thread with nil on success, or an NSError describing
+/// either an SDK-availability miss or a compile failure.
+void UtvWebKitCompileContentRuleList(WKUserContentController *controller,
+                                     NSString *identifier,
+                                     NSString *encodedJSON,
+                                     void (^completion)(NSError * _Nullable error));
 
 NS_ASSUME_NONNULL_END
