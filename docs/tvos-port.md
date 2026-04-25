@@ -24,7 +24,9 @@ Result: tvOS callsites read identically to macOS — `WKWebView *web = [[WKWebVi
 
 This means **any Swift class-level reference** to a WebKit class — `WKWebView(frame:configuration:)`, `WKWebViewConfiguration()`, `WKWebsiteDataStore.default()`, `WKUserScript(source:…)`, `WKContentWorld.page` — emits a class ref that dyld will fail on at launch. Instance-level method calls on already-typed values are fine (selector dispatch via `objc_msgSend`); only class-level construction and class-method calls produce the offending refs.
 
-Workaround: every WebKit class construction or class-method call on tvOS goes through a C bridge function in `UtvWebKitTV.m` that uses `NSClassFromString` (resolved at runtime *after* the dlopen). Currently bridged: `UtvWebKitMakeWebView`, `UtvWebKitMakeConfiguration`, `UtvWebKitMakeUserScript`, `UtvWebKitDefaultDataStore`, `UtvWebKitAllWebsiteDataTypes`. macOS keeps the direct Swift constructors via `#if os(tvOS) … #else … #endif`. `WKContentRuleListStore` is skipped entirely on tvOS (see `AdBlocker.compileContentRules`); CSS-hide + scriptlet injection fill the gap.
+Workaround: every WebKit class construction or class-method call on tvOS goes through a C bridge function in `UtvWebKitTV.m` that uses `NSClassFromString` (resolved at runtime *after* the dlopen). Currently bridged: `UtvWebKitMakeWebView`, `UtvWebKitMakeConfiguration`, `UtvWebKitMakeUserScript`, `UtvWebKitDefaultDataStore`, `UtvWebKitAllWebsiteDataTypes`, `UtvWebKitCompileContentRuleList`. macOS keeps the direct Swift constructors via `#if os(tvOS) … #else … #endif`.
+
+`UtvWebKitCompileContentRuleList` is the most involved bridge — it has to call a class method (`+[WKContentRuleListStore defaultStore]`) and then an instance method whose completion handler hands back another WebKit type (`WKContentRuleList`) without ever letting either type's class ref into the binary. The bridge dispatches both via `objc_msgSend` after `respondsToSelector:` checks, then routes the resulting `WKContentRuleList` back into `[WKUserContentController addContentRuleList:]` (also via `objc_msgSend`). Swift only sees the `WKUserContentController *` parameter and an error-only completion. The `WKContentRuleListStore` SDK header is annotated `API_AVAILABLE(macos, ios)` with no tvOS — but the runtime class IS shipped in `/System/Library/Frameworks/WebKit.framework` on tvOS (single WebKit binary across platforms), so `NSClassFromString` resolves it.
 
 The Objective-C bridge itself can use the WebKit types as parameter / return types in its function signatures — those don't emit class refs, only forward declarations.
 
@@ -102,22 +104,9 @@ Plus (in a later step) a `module.modulemap` that re-publishes the vendored WebKi
 
 Coordinator logic (autoplay-next disable, position tracker, fullscreen override, maximize CSS) lives in `WebPlayerView.swift` and is shared verbatim — only the `make<Platform>View` factory differs across files.
 
-## Runtime smoke test
+## Runtime bootstrap
 
-On app launch (tvOS only):
-
-```swift
-guard UtvWebKit.isAvailable else {
-    fatalError("WebKit framework not available on this tvOS build")
-}
-```
-
-`isAvailable` verifies:
-- `dlopen` of WebKit.framework succeeded
-- `NSClassFromString("WKWebView")` returns a class
-- The handful of selectors we depend on (`-loadRequest:`, `-evaluateJavaScript:completionHandler:`, our private prefs) all `respondsToSelector:`
-
-Surfaces a clean error if Apple reshuffles WebKit's API in a future tvOS release rather than crashing mid-frame.
+On the first `WebPlayerView.makeWebView`, we call `UtvWebKitBootstrap()` (no return-value check — the bridge falls back through three candidate framework paths and idempotently caches success). `UtvWebKitIsAvailable()` does a `respondsToSelector:` smoke check on the methods we depend on, but we don't currently gate launch on it; if Apple reshuffles WebKit's surface, we'd see it as a bridge call returning nil rather than a clean fatalError. Wire `IsAvailable` into the launch path if that becomes a real risk.
 
 ## Build & deploy
 
@@ -127,7 +116,13 @@ just build-tv              # SwiftPM cross-compile (no .app — just verifies th
 just gen-tv                # regenerate tvos/utv-tv.xcodeproj from project.yml (XcodeGen)
 just bundle-tv             # xcodebuild Release .app — unsigned, useful for inspecting the bundle
 just deploy-tv             # build signed + sideload to the single paired Apple TV
+just launch-tv             # launch utv on the paired Apple TV (returns immediately)
+just launch-tv-console     # launch + stream stdout/stderr from the device until exit
+just kill-tv               # SIGKILL any running utv process on the Apple TV
+just iterate-tv            # deploy-tv + launch-tv-console — the inner-loop iteration recipe
 ```
+
+The launch/kill recipes wrap `xcrun devicectl device process …` and read the device UDID from `$TV_DEVICE_ID` (set in `.envrc` via direnv — `scripts/deploy-tv.sh` auto-detects the value to seed it). `launch-tv-console` is the workhorse for debugging dyld errors and Swift fatal errors: it streams the process's stdio over the USB/network bridge so you see crash output without round-tripping through `just logs-tv`. `iterate-tv` chains a fresh deploy with a console launch — the standard build → run → observe loop.
 
 `scripts/deploy-tv.sh` auto-detects the paired TV (`xcrun devicectl list devices --json-output`, filtering for `deviceType=appleTV` + `pairingState=paired` and extracting the xcodebuild-style 8-16-hex UDID from `potentialHostnames`) and the signing team (`defaults read com.apple.dt.Xcode IDEProvisioningTeamByIdentifier`). Override either with `DEVELOPMENT_TEAM=XXXXXXXXXX scripts/deploy-tv.sh`.
 
@@ -172,9 +167,11 @@ This doc rewrites itself: "Strategy" becomes "How the bridge works", "Risks" bec
 - [x] **`just bundle-tv` + `just deploy-tv`** — `xcodebuild` produces a Release `.app`; `scripts/deploy-tv.sh` builds signed and installs to the single paired Apple TV via `xcrun devicectl device install app`.
 - [x] **`just launch-tv` / `launch-tv-console` / `iterate-tv` / `kill-tv`** — `$TV_DEVICE_ID`-driven recipes wrapping `xcrun devicectl device process …`. `iterate-tv` chains deploy + launch-with-console for the dyld-error iteration loop. `TV_DEVICE_ID` lives in `.envrc` (direnv).
 - [x] **App launches on Apple TV** — clean dyld load. Took routing every WebKit class construction through a C bridge in `UtvWebKitTV.m` (see "Caveat: dyld eagerly binds class refs" above). AdBlocker scriptlet injection succeeds; WebKit's filesystem-permission warnings on launch are non-fatal sandbox noise.
-- [ ] First sideload to Apple TV — verify ad blocking + playback + Siri Remote
+- [x] **`WKContentRuleListStore` bridged on tvOS** — `UtvWebKitCompileContentRuleList` resolves the store + compile method via `NSClassFromString` + `objc_msgSend`, and pipes the resulting `WKContentRuleList` into `addContentRuleList:` without exposing either WebKit type to Swift. Restores the WebKit-native content-blocker layer (uBO filter list → JSON rules) so tvOS gets the same three-layer ad-block stack as macOS.
+- [x] **Consent-cookie gate on tvOS `ContentView`** — Siri Remote can't click YouTube's GDPR consent banner inside a WKWebView (no DOM focus engine bridge), so on tvOS we never show the banner: `ContentView` waits for the Mac → TV sync to deliver the SOCS cookie (see [docs/sync-design.md](sync-design.md)) before mounting `WebPlayerView`. If the Mac isn't reachable, an actionable retry view fronts the WebView. Cached cookies from prior sessions are re-injected before mount via `ConsentManager.ensureConsent()`.
+- [ ] First sideload to Apple TV — verify ad blocking + playback
 - [ ] Restore tvOS app icon — currently empty (see "Asset catalog" below)
-- [ ] Focus-driven `ContentView` for tvOS — channel list, video list, player. Design after first hardware smoke test confirms WKWebView playback works.
+- [ ] Focus-driven `ContentView` for tvOS — channel list, video list, player. Design after first hardware smoke test confirms WKWebView playback works. Will likely need a JS focus-engine shim (UIPress events → DOM focus + synthetic clicks) so the Siri Remote can drive HTML controls inside the WebView; tvosbrowser is the reference implementation.
 
 ### Cross-compile invocation
 
