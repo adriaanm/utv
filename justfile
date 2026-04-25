@@ -12,7 +12,7 @@ sync-webkit-headers:
     set -euo pipefail
     sdk=$(xcrun --sdk iphoneos --show-sdk-path)
     src="$sdk/System/Library/Frameworks/WebKit.framework/Headers"
-    dst="tvOS/Vendored/WebKit"
+    dst="Sources/UtvWebKitTV/include/WebKit"
     if [ ! -d "$src" ]; then
         echo "iOS SDK WebKit headers not found at $src" >&2
         echo "Install Xcode, then: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer" >&2
@@ -22,6 +22,7 @@ sync-webkit-headers:
     cp "$src/"*.h "$dst/"
     count=$(ls -1 "$dst" | wc -l | tr -d ' ')
     echo "Vendored $count WebKit headers from $sdk"
+    echo "  destination: $dst"
 
 # Build the app (debug)
 build: _ensure-resources

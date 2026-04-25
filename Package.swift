@@ -14,13 +14,28 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "utv",
-            dependencies: ["UtvMacros"],
+            dependencies: ["UtvMacros", "UtvWebKitTV"],
             path: "Sources",
             exclude: [
                 "utv.entitlements",
+                "UtvWebKitTV",
             ],
             resources: [
                 .process("Resources"),
+            ]
+        ),
+        .target(
+            name: "UtvWebKitTV",
+            path: "Sources/UtvWebKitTV",
+            publicHeadersPath: "include",
+            cSettings: [
+                // tvOS-only: vendored WebKit headers (gitignored, populated by `just sync-webkit-headers`).
+                .headerSearchPath("include", .when(platforms: [.tvOS])),
+            ],
+            linkerSettings: [
+                // tvOS WebKit has no link-time stub. Defer unresolved symbols (_OBJC_CLASS_$_WKWebView etc.)
+                // to runtime resolution; UtvWebKitBootstrap() dlopens the framework before first use.
+                .unsafeFlags(["-Xlinker", "-undefined", "-Xlinker", "dynamic_lookup"], .when(platforms: [.tvOS])),
             ]
         ),
         .macro(

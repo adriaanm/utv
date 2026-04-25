@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import UtvWebKitTV
 
 struct WebPlayerView: NSViewRepresentable {
     let videoID: String?
@@ -16,9 +17,12 @@ struct WebPlayerView: NSViewRepresentable {
 
 extension WebPlayerView {
     func makeWebView(context: Context) -> WKWebView {
+        _ = UtvWebKitBootstrap()
+
         let config = WKWebViewConfiguration()
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
         config.mediaTypesRequiringUserActionForPlayback = []
+        UtvWebKitEnableYouTubeMediaPrefs(config)
 
         AdBlocker.configure(config)
 

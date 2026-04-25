@@ -1,6 +1,6 @@
 # tvOS Port Plan
 
-Status: **planning** (no code yet). This doc evolves into a guide once implemented.
+Status: **in progress.** Foundation scaffolding underway. This doc evolves into a guide once implemented. Progress checklist at the bottom.
 
 ## Goal
 
@@ -38,65 +38,46 @@ just sync-webkit-headers
 
 Layout:
 ```
-tvOS/
-  Vendored/
-    WebKit/                      # gitignored, regenerate with just sync-webkit-headers
-      WKWebView.h
-      WKWebViewConfiguration.h
-      WKUserContentController.h
-      ...
+Sources/UtvWebKitTV/include/WebKit/
+    WKWebView.h
+    WKWebViewConfiguration.h
+    WKUserContentController.h
+    ...
 ```
 
-Re-run after every Xcode update. The `_ensure-resources` recipe (already used by `just build`) is extended to call this if the directory is missing, so the workflow stays a single `just build`.
+Gitignored. Re-run after every Xcode update.
 
 ## Module layout
 
 ```
 Sources/
-  UtvWebKit/                     # New ObjC bridge target (built for both platforms)
+  UtvWebKitTV/                   # ObjC bridge target. tvOS only — no-op on macOS.
     include/
-      UtvWebKit.h                # Public Swift-facing interface
-      UtvWebKitPrivate.h         # Private WebKit category declarations
-      module.modulemap           # exposes UtvWebKit to Swift
-    UtvWebView.m                 # Bridge implementation (#if for platform branches)
-  WebPlayerView.swift            # Existing — Coordinator logic stays here, shared
-  WebPlayerView+macOS.swift      # NSViewRepresentable wrapping WKWebView directly
-  WebPlayerView+tvOS.swift       # UIViewRepresentable wrapping UtvWebView
+      UtvWebKitTV.h              # bootstrap + smoke test + private prefs setter
+      WebKit/                    # gitignored, populated by `just sync-webkit-headers`
+        WKWebView.h
+        WKWebViewConfiguration.h
+        ...
+      module.modulemap           # exposes UtvWebKitTV to Swift; (later) WebKit module on tvOS
+    UtvWebKitTV.m                # dlopen + respondsToSelector smoke check + _setMediaSourceEnabled: etc.
+  WebPlayerView.swift            # Coordinator logic stays here, shared across platforms
+  WebPlayerView+macOS.swift      # NSViewRepresentable using system WKWebView directly
+  WebPlayerView+tvOS.swift       # UIViewRepresentable using WKWebView via vendored module
   ContentView.swift              # macOS — unchanged
   ContentView+tvOS.swift         # Focus-driven list view, no NavigationSplitView
 ```
 
-Coordinator logic (autoplay-next disable, position tracker, fullscreen override, maximize CSS) is verbatim shared in extensions on `WebPlayerView` — only the `make<Platform>View` differs.
+**Revised approach (narrower than the original sketch):** no monolithic `UtvWebView` wrapper class. WebKit's surface used by `WebPlayerView` and `AdBlocker` is extensive (`WKWebView`, `WKWebViewConfiguration`, `WKUserContentController`, `WKContentRuleListStore`, `WKUserScript`, `WKContentWorld`, `WKNavigationDelegate`, `WKScriptMessageHandler`, `WKNavigationAction`, …); wrapping all of it in ObjC for both platforms would be a lot of duplicate code on macOS for no value.
 
-## Bridge surface
+Instead the bridge target provides only what's strictly tvOS-specific:
 
-Mirrors exactly what `WebPlayerView`'s Coordinator uses today, in Swift-friendly ObjC:
+1. A C entry point `UtvWebKitBootstrap()` that `dlopen`s the framework on tvOS (no-op on macOS).
+2. `UtvWebKitIsAvailable()` — `respondsToSelector:` smoke check on the few methods we depend on.
+3. `UtvWebKitEnableYouTubeMediaPrefs(WKWebViewConfiguration *)` — calls the private `_setMediaSourceEnabled:` etc. via a category, without exposing them to Swift.
 
-```objc
-@interface UtvWebView : UIView
-- (instancetype)initWithUserAgent:(NSString *)userAgent;
+Plus (in a later step) a `module.modulemap` that re-publishes the vendored WebKit headers as `module WebKit` for tvOS Swift code to import. macOS Swift continues to use the system WebKit module.
 
-// Configuration (called before first load)
-- (void)addUserScriptSource:(NSString *)source
-              atDocumentStart:(BOOL)atStart
-                  inPageWorld:(BOOL)inPageWorld;
-- (void)addMessageHandler:(id<UtvWebViewMessageHandler>)handler name:(NSString *)name;
-- (void)addContentRuleList:(WKContentRuleList *)list;
-+ (void)compileContentRuleListJSON:(NSString *)json
-                         identifier:(NSString *)identifier
-                         completion:(void (^)(WKContentRuleList *, NSError *))cb;
-
-// Navigation
-@property (nonatomic, copy) NSString *customUserAgent;
-@property (nonatomic, weak) id<UtvWebViewNavigationDelegate> navigationDelegate;
-- (void)loadURL:(NSURL *)url;
-- (void)evaluateJavaScript:(NSString *)js
-            completionHandler:(void (^_Nullable)(id _Nullable, NSError *_Nullable))cb;
-- (void)pauseAllMedia;
-@end
-```
-
-On macOS this is a thin pass-through to `WKWebView`. On tvOS the same code compiles against the vendored headers; `dynamic_lookup` and `dlopen` make it work at runtime.
+Coordinator logic (autoplay-next disable, position tracker, fullscreen override, maximize CSS) lives in `WebPlayerView.swift` and is shared verbatim — only the `make<Platform>View` factory differs across files.
 
 ## Runtime smoke test
 
@@ -147,3 +128,20 @@ Sideload requirements (document in README):
 ## When done
 
 This doc rewrites itself: "Strategy" becomes "How the bridge works", "Risks" become validated decisions or known limitations, the verification list becomes a smoke-test checklist for new tvOS releases.
+
+## Progress checklist
+
+- [x] Plan + header-vendoring recipe (`just sync-webkit-headers`) committed
+- [x] `Sources/UtvWebKitTV/` bridge target scaffolded — `UtvWebKitBootstrap()`, `UtvWebKitIsAvailable()`, `UtvWebKitEnableYouTubeMediaPrefs()`. Wired into `WebPlayerView.makeWebView`. No-op on macOS, ready for tvOS code paths.
+- [x] `Package.swift` declares the `UtvWebKitTV` target with `-undefined dynamic_lookup` linker flag and tvOS-conditioned vendored-headers search path.
+- [ ] `Package.swift` declares tvOS as a supported platform (currently macOS-only)
+- [ ] `module.modulemap` re-publishes vendored WebKit as `module WebKit` for tvOS Swift
+- [ ] `WebPlayerView` split into platform-specific representables
+- [ ] tvOS app target with focus-driven `ContentView+tvOS`
+- [ ] Bundle + deploy scripts (`just bundle-tv`, `just deploy-tv`)
+- [ ] First sideload to Apple TV — verify ad blocking + playback + Siri Remote
+
+### Notes from scaffolding
+
+- SwiftPM's auto-generated modulemap rejects sibling directories next to an umbrella header (we have `include/UtvWebKitTV.h` AND `include/WebKit/`). An explicit `include/module.modulemap` listing only `UtvWebKitTV.h` sidesteps the check.
+- `WKWebViewConfiguration *` parameter in the bridge header is forward-declared (`@class WKWebViewConfiguration;`). This avoids requiring importers of `UtvWebKitTV` to also see the WebKit module — Swift unifies the type at the call site via its own `import WebKit`.
