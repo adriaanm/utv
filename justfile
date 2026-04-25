@@ -21,8 +21,15 @@ sync-webkit-headers:
     rm -rf "$dst" && mkdir -p "$dst"
     cp "$src/"*.h "$dst/"
     count=$(ls -1 "$dst" | wc -l | tr -d ' ')
+    # iOS WebKit headers reference UIKit types that are unavailable on tvOS
+    # (UIEventButtonMask, UIEditMenuInteractionAnimating). We never use those
+    # WebKit APIs from utv, so strip the offending declarations after sync so
+    # the WebKit clang module compiles for tvOS.
+    sed -i '' '/UIEventButtonMask /d' "$dst/WKNavigationAction.h"
+    sed -i '' '/UIEditMenuInteractionAnimating/d' "$dst/WKUIDelegate.h"
     echo "Vendored $count WebKit headers from $sdk"
     echo "  destination: $dst"
+    echo "  patched: stripped tvOS-incompatible UIKit references in WKNavigationAction.h, WKUIDelegate.h"
 
 # Build the app (debug)
 build: _ensure-resources

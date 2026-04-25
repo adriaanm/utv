@@ -139,7 +139,9 @@ This doc rewrites itself: "Strategy" becomes "How the bridge works", "Risks" bec
 - [x] `Sources/UtvWebKitTV/` bridge target scaffolded — `UtvWebKitBootstrap()`, `UtvWebKitIsAvailable()`, `UtvWebKitEnableYouTubeMediaPrefs()`. Wired into `WebPlayerView.makeWebView`. No-op on macOS, ready for tvOS code paths.
 - [x] `Package.swift` declares the `UtvWebKitTV` target with `-undefined dynamic_lookup` linker flag and tvOS-conditioned vendored-headers search path.
 - [x] `VendoredWebKit` target added — owns the gitignored iOS-SDK WebKit headers and a `module.modulemap` declaring `module WebKit`. Conditionally depended on by `utv` and `UtvWebKitTV` only on tvOS.
-- [ ] `Package.swift` declares tvOS as a supported platform (currently macOS-only)
+- [x] `Package.swift` declares `tvOS(.v17)` as a supported platform.
+- [x] `just sync-webkit-headers` patches iOS-only UIKit references in `WKNavigationAction.h` / `WKUIDelegate.h` so the WebKit clang module compiles on tvOS. (See "Header patching" below.)
+- [x] tvOS clang build of the `UtvWebKitTV` and `VendoredWebKit` targets verified — `swift build --triple arm64-apple-tvos17.0 --sdk $(xcrun --sdk appletvos --show-sdk-path)`.
 - [ ] `WebPlayerView` split into platform-specific representables
 - [ ] tvOS app target with focus-driven `ContentView+tvOS`
 - [ ] Bundle + deploy scripts (`just bundle-tv`, `just deploy-tv`)
@@ -159,3 +161,12 @@ A `module WebKit` declaration inside `UtvWebKitTV/include/` would conflict with 
 `UtvWebKitTV` (the ObjC bridge) also depends on `VendoredWebKit` on tvOS via `headerSearchPath("../VendoredWebKit/include")`, so its `#import "WebKit/WKWebView.h"` etc. find the same single-source-of-truth header copy.
 
 `just sync-webkit-headers` writes the headers into `VendoredWebKit/include/WebKit/`. The modulemap and bridge target both reference that location.
+
+### Header patching
+
+The vendored iOS WebKit headers reference iOS UIKit types that don't exist on tvOS:
+
+- `UIEventButtonMask` (used by `WKNavigationAction.buttonNumber`) — tvOS has no UIKit pointer/click events.
+- `UIEditMenuInteractionAnimating` (used by `WKUIDelegate willPresent/willDismissEditMenu:`) — tvOS has no edit menus.
+
+We never call those WebKit APIs from utv, so `just sync-webkit-headers` strips the offending single-line declarations after copying the headers. This keeps the WebKit clang module buildable on tvOS without touching the rest of the surface. Re-run on every Xcode update; if Apple changes the offending declarations, add the new patterns to the recipe.

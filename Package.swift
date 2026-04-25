@@ -7,6 +7,7 @@ let package = Package(
     name: "utv",
     platforms: [
         .macOS(.v14),
+        .tvOS(.v17),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "602.0.0"),
