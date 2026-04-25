@@ -19,15 +19,9 @@ public struct AppRoot: Scene {
 
     public var body: some Scene {
         WindowGroup {
+            // The tvOS startup pull is driven from ContentView (it gates WebPlayerView
+            // on the consent cookie that the pull delivers — see docs/tvos-port.md).
             ContentView()
-                #if os(tvOS)
-                .task {
-                    // Pull from the Mac on every cold start. The Mac is assumed to
-                    // be running and advertising; if not, the timeout fires and we
-                    // continue with whatever local state we already have.
-                    await SyncCoordinator.shared.runTVStartupPull()
-                }
-                #endif
         }
         #if os(macOS)
         .defaultSize(width: 1280, height: 800)

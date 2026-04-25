@@ -664,15 +664,79 @@ func formatTime(_ seconds: Double) -> String {
 // tvOS: placeholder for first hardware-validation sideload. Loads a single hardcoded
 // watch URL so we can verify the WKWebView ad-block pipeline survives on the device.
 // Full focus-driven channel/video browser comes after that smoke test passes.
+//
+// The Siri Remote can't navigate inside the WKWebView (no DOM focus engine bridge),
+// so we cannot click YouTube's GDPR consent banner from this device. The cookie has
+// to arrive via Mac → TV sync (see docs/sync-design.md). This view gates WebPlayerView
+// behind that sync, falling back to an actionable error if no Mac is reachable.
 struct ContentView: View {
+    private enum Phase {
+        case preparing
+        case ready
+        case noConsent
+    }
+    @State private var phase: Phase = .preparing
+
     var body: some View {
-        WebPlayerView(
-            videoID: "dQw4w9WgXcQ",
-            maximized: true,
-            startAt: 0,
-            onPositionUpdate: nil
-        )
-        .ignoresSafeArea()
+        Group {
+            switch phase {
+            case .preparing:
+                preparingView
+            case .ready:
+                WebPlayerView(
+                    videoID: "dQw4w9WgXcQ",
+                    maximized: true,
+                    startAt: 0,
+                    onPositionUpdate: nil
+                )
+                .ignoresSafeArea()
+            case .noConsent:
+                noConsentView
+            }
+        }
+        .task { await prepare() }
+    }
+
+    private var preparingView: some View {
+        VStack(spacing: 24) {
+            ProgressView()
+            Text("Syncing with Mac…")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var noConsentView: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 80))
+                .foregroundStyle(.orange)
+            Text("YouTube consent cookie not available")
+                .font(.title2)
+            Text("Open utv on your Mac on the same network, accept the YouTube cookie banner there, then press Retry.")
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 800)
+            Button("Retry") {
+                Task { await prepare() }
+            }
+        }
+        .padding(64)
+    }
+
+    private func prepare() async {
+        let consent = ConsentManager.shared
+        if consent.socsCookieValue != nil {
+            // Cached from a prior session — re-inject into the WKWebView cookie store
+            // before mounting WebPlayerView so YouTube serves the page directly.
+            await consent.ensureConsent()
+            phase = .ready
+            return
+        }
+        phase = .preparing
+        _ = await SyncCoordinator.shared.runTVStartupPull()
+        phase = consent.socsCookieValue != nil ? .ready : .noConsent
     }
 }
 #endif
