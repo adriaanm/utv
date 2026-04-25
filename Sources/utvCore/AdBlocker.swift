@@ -59,7 +59,9 @@ struct AdBlocker {
         // the public SDK headers; resolving via NSClassFromString works.
         UtvWebKitCompileContentRuleList(controller, "utv-rules", jsonString) { error in
             if let error = error {
-                NSLog("[AdBlocker] tvOS content rules unavailable: \(error.localizedDescription)")
+                let ns = error as NSError
+                NSLog("[AdBlocker] tvOS content rules unavailable: %@ (domain=%@ code=%ld userInfo=%@)",
+                      error.localizedDescription, ns.domain, ns.code, String(describing: ns.userInfo))
             } else {
                 NSLog("[AdBlocker] Content rules compiled and loaded (tvOS bridge)")
             }

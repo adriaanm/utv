@@ -107,14 +107,30 @@ void UtvWebKitCompileContentRuleList(WKUserContentController *controller,
         completion(UtvWebKitMakeError(1, @"WKContentRuleListStore class unavailable at runtime"));
         return;
     }
-    SEL defaultSel = NSSelectorFromString(@"defaultStore");
-    if (![storeCls respondsToSelector:defaultSel]) {
-        completion(UtvWebKitMakeError(2, @"+[WKContentRuleListStore defaultStore] unavailable"));
-        return;
+    // On tvOS, +defaultStore writes under ~/Library/WebKit/ContentRuleListStore which the
+    // app sandbox can't create (you'll see "could not create directory ...WebsiteData..."
+    // in the device console). Use a custom URL inside Library/Caches so the store has a
+    // writable home, then fall back to defaultStore on macOS where the default path works.
+    id store = nil;
+#if TARGET_OS_TV
+    NSURL *cachesURL = [[[NSFileManager defaultManager] URLsForDirectory:NSCachesDirectory inDomains:NSUserDomainMask] firstObject];
+    NSURL *storeURL = [cachesURL URLByAppendingPathComponent:@"ContentRuleListStore" isDirectory:YES];
+    [[NSFileManager defaultManager] createDirectoryAtURL:storeURL withIntermediateDirectories:YES attributes:nil error:NULL];
+    SEL withURLSel = NSSelectorFromString(@"storeWithURL:");
+    if ([storeCls respondsToSelector:withURLSel]) {
+        store = ((id (*)(id, SEL, NSURL *))objc_msgSend)(storeCls, withURLSel, storeURL);
     }
-    id store = ((id (*)(id, SEL))objc_msgSend)(storeCls, defaultSel);
+#endif
     if (store == nil) {
-        completion(UtvWebKitMakeError(3, @"+[WKContentRuleListStore defaultStore] returned nil"));
+        SEL defaultSel = NSSelectorFromString(@"defaultStore");
+        if (![storeCls respondsToSelector:defaultSel]) {
+            completion(UtvWebKitMakeError(2, @"+[WKContentRuleListStore defaultStore] unavailable"));
+            return;
+        }
+        store = ((id (*)(id, SEL))objc_msgSend)(storeCls, defaultSel);
+    }
+    if (store == nil) {
+        completion(UtvWebKitMakeError(3, @"WKContentRuleListStore lookup returned nil"));
         return;
     }
     SEL compileSel = NSSelectorFromString(@"compileContentRuleListForIdentifier:encodedContentRuleList:completionHandler:");
