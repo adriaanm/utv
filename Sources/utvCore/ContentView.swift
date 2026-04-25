@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var isRefreshing = false
     @State private var errorMessage: String?
     @State private var isFullScreen = false
+    @State private var showSyncSheet = false
 
     private var feedService: FeedService {
         FeedService(modelContext: modelContext)
@@ -54,6 +55,12 @@ struct ContentView: View {
             if consentManager.socsCookieValue != nil {
                 await consentManager.ensureConsent()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .utvSyncMenuRequested)) { _ in
+            showSyncSheet = true
+        }
+        .sheet(isPresented: $showSyncSheet) {
+            SyncSheet(isPresented: $showSyncSheet)
         }
         .sheet(item: $consentManager.consentRequest) { request in
             VStack(spacing: 0) {
@@ -578,6 +585,66 @@ struct PlayerView: View {
         .padding(.horizontal)
         .padding(.vertical, 8)
         .background(.bar)
+    }
+}
+
+// MARK: - Sync Sheet
+
+struct SyncSheet: View {
+    @Binding var isPresented: Bool
+    @State private var phase: Phase = .running
+    @State private var summary: String = ""
+
+    enum Phase { case running, done, failed }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Sync with Apple TV")
+                .font(.headline)
+
+            switch phase {
+            case .running:
+                ProgressView()
+                Text("Looking for utv on Apple TV…")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            case .done:
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.largeTitle)
+                    .foregroundStyle(.green)
+                Text(summary)
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+            case .failed:
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.largeTitle)
+                    .foregroundStyle(.orange)
+                Text(summary)
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.red)
+            }
+
+            Button("Done") { isPresented = false }
+                .keyboardShortcut(.defaultAction)
+                .disabled(phase == .running)
+        }
+        .padding(24)
+        .frame(minWidth: 360)
+        .task {
+            let stats = await SyncCoordinator.shared.runMacInitiatedSync()
+            if let stats {
+                phase = .done
+                summary = "Pushed \(stats.channelsInserted + stats.channelsUpdated) channel changes, received \(stats.videosUpdated) watch updates."
+            } else {
+                phase = .failed
+                if case let .failed(msg) = SyncCoordinator.shared.status {
+                    summary = msg
+                } else {
+                    summary = "Sync failed."
+                }
+            }
+        }
     }
 }
 

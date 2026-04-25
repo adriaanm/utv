@@ -32,6 +32,7 @@ Use `just diff-filters` to see what changed upstream in uAssets. Use `just adblo
 
 - [docs/roadmap.md](docs/roadmap.md) — Project roadmap
 - [docs/ubo-tracking.md](docs/ubo-tracking.md) — Ad blocking architecture and update workflow
+- [docs/sync-design.md](docs/sync-design.md) — Mac ↔ Apple TV sync (MultipeerConnectivity; channels + watch progress + SOCS cookie)
 
 ## Repo structure
 

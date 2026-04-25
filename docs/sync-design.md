@@ -1,12 +1,14 @@
 # Mac ↔ Apple TV Sync
 
-Status: **design.** Not implemented yet — sketch for review before coding.
+Status: **implemented (v1).** Both directions wired through MultipeerConnectivity. tvOS pulls from the Mac on launch; the Mac can also push on demand via `Device → Sync with Apple TV…`. The bundle additionally carries the YouTube SOCS consent cookie so the tvOS app skips the consent banner click-through.
 
 ## Goals
 
 1. Mac is the source of truth for **channel subscriptions**. Adding a channel on the Mac should make it appear on the Apple TV without retyping.
 2. Watch progress (`watchPercentage`, `lastPosition`, `watchedAt`) should be **bidirectional**: a video watched on the TV shows as watched on the Mac, and vice versa, with a basic conflict-resolution rule.
-3. Driven by an explicit user action — a menu item on the Mac (`Sync with Apple TV…`). No background sync, no daemon.
+3. Two trigger points:
+   - **tvOS startup pull (automatic).** Every cold start, the tvOS app browses for the Mac and pulls. The Mac is assumed to be running; if it isn't, the discovery times out silently and the TV continues with whatever local state it has.
+   - **Mac-initiated push (manual).** A menu item (`Device → Sync with Apple TV…`) on the Mac browses for the TV and exchanges. Used after adding/removing channels on the Mac when you want the TV to catch up immediately.
 4. No cloud, no account. Direct LAN peer-to-peer.
 
 ## Non-goals
@@ -20,8 +22,12 @@ Status: **design.** Not implemented yet — sketch for review before coding.
 
 `MultipeerConnectivity` is built into both macOS 14 and tvOS 17, no third-party dependencies, handles Bonjour discovery and an encrypted session for free.
 
-- **tvOS app** advertises an `MCNearbyServiceAdvertiser` with service type `utv-sync` while the app is running. Auto-accepts invitations from peers (this is a personal-use app on a trusted LAN).
-- **Mac app** menu item `Sync with Apple TV…` starts an `MCNearbyServiceBrowser`, picks the first discovered peer (or a single-pick UI if multiple), invites, and on connection runs the exchange below.
+Both apps advertise an `MCNearbyServiceAdvertiser` with service type `utv-sync` while running, and auto-accept any invitation (trusted personal LAN). Either side can additionally spin up an `MCNearbyServiceBrowser` to drive an exchange:
+
+- **tvOS** starts a browser on launch (in `AppRoot`'s `.task`) — this is the startup pull.
+- **macOS** starts a browser when the user picks the menu item.
+
+Required Info.plist keys: `NSLocalNetworkUsageDescription` and `NSBonjourServices` listing `_utv-sync._tcp` / `_utv-sync._udp`. macOS sandbox additionally needs both `network.client` and `network.server` entitlements.
 
 If MultipeerConnectivity proves flaky on tvOS (it's known to be finicky), fall back to a 30-line HTTP server in the tvOS app and Bonjour-only discovery from the Mac.
 
@@ -34,6 +40,9 @@ Both sides exchange a single JSON `SyncBundle`. There's no incremental sync — 
 {
   "schemaVersion": 1,
   "exportedAt": "2026-04-25T17:30:00Z",
+  // null when the sender is not the canonical channel source (i.e. tvOS).
+  // Non-null (even if []) tells the receiver to treat the list as canonical
+  // and delete any local channelID that's missing.
   "channels": [
     { "channelID": "UCxxx", "handle": "@handle", "displayName": "Display", "addedAt": "..." }
   ],
@@ -46,7 +55,10 @@ Both sides exchange a single JSON `SyncBundle`. There's no incremental sync — 
       "lastPosition": 612.4,
       "duration": 703.0
     }
-  ]
+  ],
+  // Mac-only. The receiver applies it iff it currently has no SOCS cookie.
+  // Saves a tedious banner click-through on the tvOS Siri Remote.
+  "consentCookie": "CAISNQgD..."
 }
 ```
 
@@ -54,10 +66,17 @@ Both sides exchange a single JSON `SyncBundle`. There's no incremental sync — 
 
 ### Exchange
 
-1. Mac connects, sends `SyncBundle` with its full channel list + every video that has `watchPercentage > 0` (or any non-default progress).
-2. tvOS receives, applies the merge below, then replies with its own `SyncBundle` (subset: channels are read-only on TV, so just videos with progress).
-3. Mac receives, applies merge.
-4. Both sides disconnect.
+The exchange is symmetric: whoever initiates sends first, the responder applies + replies, both disconnect. The semantics of *what* each side sends are role-asymmetric: the Mac always includes channels + consent cookie (canonical); the tvOS bundle carries only videos with progress.
+
+**Mac-initiated push** (menu):
+1. Mac (initiator) sends bundle with channels + videos + cookie.
+2. tvOS (responder) applies, replies with videos-only bundle.
+3. Mac applies, both disconnect.
+
+**TV-initiated startup pull** (automatic on launch):
+1. tvOS (initiator) sends bundle with videos only.
+2. Mac (responder) applies the videos, replies with channels + videos + cookie.
+3. tvOS applies, both disconnect.
 
 ### Merge rules
 
@@ -65,7 +84,10 @@ Both sides exchange a single JSON `SyncBundle`. There's no incremental sync — 
 - Insert TV-side any channel from the bundle whose `channelID` doesn't exist on the TV.
 - Update `handle` / `displayName` if changed.
 - **Delete** TV-side any channel not in the bundle (Mac is canonical).
-- The TV → Mac reply does not include channels.
+- The TV → Mac reply omits channels (`null`), so the Mac applies videos-only and never deletes its own channel rows.
+
+**Consent cookie (Mac → TV):**
+- If the bundle carries `consentCookie` and the receiver has no SOCS cookie stored, persist it via `ConsentManager` and inject it into the WKWebView cookie store. If the receiver already has a cookie, the field is ignored — we don't trample what the user already accepted on this device.
 
 **Videos (bidirectional, last-write-wins on a per-field basis):**
 
@@ -86,29 +108,26 @@ It does **not** handle: deliberate "un-watch" (resetting `watchPercentage` to 0)
 
 ## UI
 
-- **Mac**: a `Sync` menu item under a new top-level `Device` menu (or under `File`, TBD). On click, opens a small sheet showing discovery progress, peer name, exchange status, and a final summary ("Pushed 12 channels, received 4 watch updates"). Dismisses on done.
-- **tvOS**: no UI. The advertiser runs whenever the app is foregrounded. A subtle indicator in the corner (small dot) when a sync is in progress is nice-to-have; not in v1.
+- **Mac**: `Device → Sync with Apple TV…` (⌘⇧S). On click, opens a small sheet showing discovery progress and a final summary ("Pushed N channel changes, received M watch updates"). Dismisses on done. The advertiser runs in the background regardless, so the TV's startup pull also works without the user ever opening the menu.
+- **tvOS**: no UI. The advertiser runs whenever the app is foregrounded; the startup pull fires from `AppRoot`'s `.task` once per cold start. A subtle on-screen indicator while syncing is nice-to-have; not in v1.
 
 ## Implementation outline
 
 ```
 Sources/utvCore/
   Services/
-    SyncProtocol.swift     # SyncBundle codable types, schema version
-    SyncMerger.swift       # pure functions: merge(local: SyncBundle, remote: SyncBundle, into: ModelContext)
+    SyncProtocol.swift     # SyncBundle codable types + SyncMerger pure functions + JSON coding
   Sync/
-    SyncTransport.swift    # MCSession wrapper, send/recv SyncBundle, peer discovery
-    SyncCoordinator.swift  # orchestrates the exchange; one method `runSync(role: .initiator|.responder)`
-
-Sources/utvCore/
-  AppRoot.swift            # tvOS-side: start advertiser on appear, stop on disappear
-  ContentView.swift (macOS body):
-                           # add Sync menu item -> opens SyncSheet -> SyncCoordinator(role: .initiator)
+    SyncTransport.swift    # SyncAdvertiser (responder) + SyncBrowser (initiator) over MultipeerConnectivity
+    SyncCoordinator.swift  # @MainActor singleton: bootstrap from AppRoot, runs both roles
+  AppRoot.swift            # constructs the SwiftData container, bootstraps SyncCoordinator,
+                           # adds Device menu on macOS, fires startup pull on tvOS
+  ContentView.swift        # SyncSheet — driven by NotificationCenter from the menu item
 ```
 
-`SyncMerger` is the testable core (pure SwiftData operations on a passed `ModelContext`). Transport + coordinator are platform-conditioned thinly: `import MultipeerConnectivity` works on both macOS and tvOS, but `MCNearbyServiceAdvertiser` is what tvOS uses and `MCNearbyServiceBrowser` is what Mac uses.
+`SyncMerger` is the testable core (pure SwiftData operations on a passed `ModelContext`). `SyncCoordinator` glues the merger to the transport and is platform-conditioned thinly: it always advertises, and exposes `runMacInitiatedSync()` / `runTVStartupPull()` for the two browser roles. Both run through the same `runInitiator(timeout:)` body — what differs is which side's bundle carries channels + cookie (driven by `isCanonicalSource = #if os(macOS)`).
 
-Bundles are JSON via `JSONEncoder/Decoder`. No protobuf, no Codable wizardry needed.
+Bundles are JSON via `JSONEncoder/Decoder` with ISO-8601 dates. No protobuf, no Codable wizardry needed.
 
 ## Open questions
 
@@ -117,13 +136,14 @@ Bundles are JSON via `JSONEncoder/Decoder`. No protobuf, no Codable wizardry nee
 3. **Schema migrations across versions** — `schemaVersion: 1` for now. If the schema changes, refuse to sync with mismatching versions until both sides updated.
 4. **Authentication** — none. Personal-use, home LAN. If we ever ship publicly, MCSession peers can be required to share a PSK (`MCEncryptionRequired` is already on by default).
 
-## What gets committed first
+## Validation status
 
-To stay incremental:
+- `swift build` (macOS) passes.
+- tvOS compilation requires the tvOS SDK (Xcode.app). Not validated in CI here; verify with `just build-tv` before sideloading.
+- Hardware end-to-end (Mac + paired Apple TV) — TBD on first real run.
 
-1. `Sources/utvCore/Services/SyncProtocol.swift` — `SyncBundle` types + `SyncMerger.merge` pure function. With unit-style asserts in a small `#if DEBUG` self-test (we don't have XCTest infra yet — see roadmap).
-2. `Sources/utvCore/Sync/SyncTransport.swift` + `SyncCoordinator.swift` — MultipeerConnectivity wiring, platform-conditioned init.
-3. tvOS `AppRoot` hook to start the advertiser.
-4. Mac `Device > Sync with Apple TV…` menu item + sheet.
+## Follow-ups
 
-Each step is independently testable: (1) is pure logic, (2) is "two devices on a network can connect and exchange bytes" without merging, (3) is "TV is discoverable from Mac", (4) is end-to-end.
+- `#if DEBUG` self-test for `SyncMerger.applyVideoMerge` (per-field merge rules) — pure logic, no XCTest needed.
+- On-screen sync indicator on tvOS during exchanges.
+- Multi-TV picker if anyone ever runs more than one. (Currently auto-picks the first peer found.)

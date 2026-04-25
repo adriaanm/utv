@@ -52,6 +52,13 @@ cat > "$CONTENTS/Info.plist" <<PLIST
     <string>public.app-category.entertainment</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>utv syncs subscriptions and watch progress directly with your Apple TV over the local network.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_utv-sync._tcp</string>
+        <string>_utv-sync._udp</string>
+    </array>
 </dict>
 </plist>
 PLIST

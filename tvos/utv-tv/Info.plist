@@ -30,5 +30,12 @@
     </array>
     <key>UILaunchScreen</key>
     <dict/>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>utv syncs subscriptions and watch progress directly with the Mac app on your local network.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_utv-sync._tcp</string>
+        <string>_utv-sync._udp</string>
+    </array>
 </dict>
 </plist>
