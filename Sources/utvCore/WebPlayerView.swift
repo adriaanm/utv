@@ -20,8 +20,18 @@ struct WebPlayerView: UIViewRepresentable {
     var startAt: Double = 0
     var onPositionUpdate: ((Double, Double) -> Void)?
 
-    func makeUIView(context: Context) -> WKWebView { makeWebView(context: context) }
-    func updateUIView(_ webView: WKWebView, context: Context) { updateWebView(webView, context: context) }
+    func makeUIView(context: Context) -> UtvFocusHostView {
+        let host = UtvFocusHostView()
+        host.attach(makeWebView(context: context))
+        return host
+    }
+
+    func updateUIView(_ host: UtvFocusHostView, context: Context) {
+        if let webView = host.webView {
+            updateWebView(webView, context: context)
+        }
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator() }
 }
 #endif
@@ -59,6 +69,19 @@ extension WebPlayerView {
             """, injectionTime: .atDocumentStart, forMainFrameOnly: true) {
             config.userContentController.addUserScript(disableAutoplay)
         }
+
+        #if os(tvOS)
+        // d-pad focus shim — see UtvFocusHostView for the host-side bridge and
+        // docs/tvos-dpad-navigation.md for the design. Injected at document start,
+        // every frame, so iframes (when we get to them) inherit it for free.
+        if let shimURL = Bundle.module.url(forResource: "focus-shim", withExtension: "js"),
+           let shimSource = try? String(contentsOf: shimURL, encoding: .utf8),
+           let shim = makePageUserScript(source: shimSource, injectionTime: .atDocumentStart, forMainFrameOnly: false) {
+            config.userContentController.addUserScript(shim)
+        } else {
+            NSLog("[WebPlayer] focus-shim.js not found in bundle — d-pad navigation disabled")
+        }
+        #endif
 
         // Override fullscreen API at document start, before YouTube captures references.
         if let fsOverride = makePageUserScript(source: """
